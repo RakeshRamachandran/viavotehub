@@ -9,6 +9,7 @@ export default function Submissions() {
   const [submissions, setSubmissions] = useState([]);
   const [message, setMessage] = useState('');
   const [selectedRating, setSelectedRating] = useState(5);
+  const [remarks, setRemarks] = useState('');
   const [votingFor, setVotingFor] = useState(null);
   const [judgeVotes, setJudgeVotes] = useState({});
   const [submissionRatings, setSubmissionRatings] = useState({});
@@ -101,6 +102,7 @@ export default function Submissions() {
         judgeName: vote.users.name,
         judgeEmail: vote.users.email,
         rating: vote.rating,
+        remarks: vote.remarks,
         submissionName: vote.submissions.team_member_name
       });
     });
@@ -137,7 +139,7 @@ export default function Submissions() {
       // Update existing vote
       result = await supabase
         .from('votes')
-        .update({ rating: selectedRating })
+        .update({ rating: selectedRating, remarks: remarks })
         .eq('submission_id', submissionId)
         .eq('judge_id', user.id);
     } else {
@@ -147,7 +149,8 @@ export default function Submissions() {
         .insert({
           submission_id: submissionId,
           judge_id: user.id,
-          rating: selectedRating
+          rating: selectedRating,
+          remarks: remarks
         });
     }
 
@@ -162,6 +165,7 @@ export default function Submissions() {
           }));
           setVotingFor(null);
           setSelectedRating(5);
+          setRemarks('');
           fetchSubmissions();
           // Refresh judge votes for all users to show updated ratings
           fetchJudgeVotes();
@@ -186,12 +190,15 @@ export default function Submissions() {
     // Use existing vote from judge votes if available, otherwise default to 5
     const existingVote = judgeVotes[submissionId]?.find(vote => vote.judge_id == user.id);
     const storedRating = existingVote ? existingVote.rating : 5;
+    const storedRemarks = existingVote ? existingVote.remarks : '';
     setSelectedRating(storedRating);
+    setRemarks(storedRemarks);
   };
 
   const cancelVoting = () => {
     setVotingFor(null);
     setSelectedRating(5);
+    setRemarks('');
   };
 
   const getRatingColor = (rating) => {
@@ -479,6 +486,14 @@ export default function Submissions() {
                                 <div className="w-full text-center mb-2 p-2 bg-green-600/20 rounded-xl border border-green-500/30">
                                   <span className="text-green-200 text-sm">Current Rating: </span>
                                   <span className="text-green-100 font-bold text-lg">{existingVote.rating}/10</span>
+                                  {existingVote.remarks && (
+                                    <div className="mt-2 text-left">
+                                      <span className="text-green-200 text-sm block mb-1">Current Remarks:</span>
+                                      <div className="text-green-100 text-sm bg-green-600/30 rounded-lg p-2 border border-green-500/20">
+                                        {existingVote.remarks}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               ) : null;
                             })()}
@@ -520,6 +535,25 @@ export default function Submissions() {
                                   {rating}
                                 </button>
                               ))}
+                            </div>
+                            
+                            {/* Remarks Field */}
+                            <div className="w-full max-w-md">
+                              <label htmlFor={`remarks-${sub.id}`} className="block text-blue-200 font-medium text-sm mb-2 text-center">
+                                Remarks (Optional)
+                              </label>
+                              <textarea
+                                id={`remarks-${sub.id}`}
+                                value={remarks}
+                                onChange={(e) => setRemarks(e.target.value)}
+                                placeholder="Add your comments or feedback about this submission..."
+                                className="w-full px-3 py-2 bg-white/5 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 backdrop-blur-sm text-sm resize-none"
+                                rows="3"
+                                maxLength="500"
+                              />
+                              <div className="text-right text-xs text-slate-400 mt-1">
+                                {remarks.length}/500
+                              </div>
                             </div>
                             
                             <div className="flex space-x-2">

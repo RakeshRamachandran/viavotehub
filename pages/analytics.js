@@ -37,6 +37,7 @@ export default function Analytics() {
           *,
           votes (
             rating,
+            remarks,
             users!votes_judge_id_fkey(name, email)
           )
         `);
@@ -72,7 +73,8 @@ export default function Analytics() {
           standardDeviation: parseFloat(standardDeviation),
           votes: votes.map(vote => ({
             judgeName: vote.users.name,
-            rating: vote.rating
+            rating: vote.rating,
+            remarks: vote.remarks
           }))
         };
       });
@@ -331,6 +333,9 @@ export default function Analytics() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Individual Votes
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Remarks
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -376,6 +381,22 @@ export default function Analytics() {
                             <div key={voteIndex} className="flex justify-between">
                               <span className="text-gray-600">{vote.judgeName}:</span>
                               <span className="font-medium">{vote.rating}/10</span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        <div className="space-y-2">
+                          {submission.votes.map((vote, voteIndex) => (
+                            <div key={voteIndex} className="border-l-2 border-gray-200 pl-3">
+                              <div className="font-medium text-gray-700">{vote.judgeName}:</div>
+                              {vote.remarks ? (
+                                <div className="text-gray-600 text-sm mt-1 bg-gray-50 p-2 rounded">
+                                  {vote.remarks}
+                                </div>
+                              ) : (
+                                <div className="text-gray-400 text-sm italic">No remarks</div>
+                              )}
                             </div>
                           ))}
                         </div>
