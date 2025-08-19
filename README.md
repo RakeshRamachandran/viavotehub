@@ -1,6 +1,6 @@
-# 🗳️ Via Voting App
+# 🗳️ VIA VoteHub
 
-A comprehensive, role-based voting application built with modern web technologies for managing project submissions and judge evaluations.
+A comprehensive, role-based voting hub built with modern web technologies for managing project submissions and judge evaluations.
 
 ## 🚀 Features
 
@@ -57,7 +57,7 @@ A comprehensive, role-based voting application built with modern web technologie
 ## 📁 Project Structure
 
 ```
-via-voting-app/
+via-votehub/
 ├── components/                 # React components
 │   ├── Navigation.js          # Role-based navigation component
 │   └── ErrorBoundary.js       # Error handling component
@@ -117,7 +117,7 @@ The system uses three main tables with Row Level Security:
 ### 1. Clone the Repository
 ```bash
 git clone <repository-url>
-cd via-voting-app
+cd via-votehub
 ```
 
 ### 2. Install Dependencies

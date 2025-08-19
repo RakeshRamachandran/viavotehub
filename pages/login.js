@@ -86,11 +86,11 @@ export default function Login() {
                 </svg>
               </div>
               <div className="hidden sm:block">
-                <span className="text-lg sm:text-xl lg:text-2xl font-bold text-white">Via Voting</span>
+                <span className="text-lg sm:text-xl lg:text-2xl font-bold text-white">VIA VoteHub</span>
                 <p className="text-blue-200 text-xs sm:text-sm">Secure Team Evaluation Platform</p>
               </div>
               <div className="sm:hidden">
-                <span className="text-lg font-bold text-white">Via</span>
+                <span className="text-lg font-bold text-white">VIA</span>
               </div>
             </div>
           </div>

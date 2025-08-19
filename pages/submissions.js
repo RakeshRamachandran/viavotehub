@@ -27,8 +27,8 @@ export default function Submissions() {
       setIsLoading(true);
       try {
         await fetchSubmissions();
-        // Only fetch judge votes if user is loaded and has superadmin role
-        if (user && user.role === 'superadmin') {
+        // Fetch judge votes for all users to show individual ratings
+        if (user) {
           await fetchJudgeVotes();
         }
       } catch (error) {
@@ -97,6 +97,7 @@ export default function Submissions() {
         votesBySubmission[vote.submission_id] = [];
       }
       votesBySubmission[vote.submission_id].push({
+        judge_id: vote.judge_id,
         judgeName: vote.users.name,
         judgeEmail: vote.users.email,
         rating: vote.rating,
@@ -162,9 +163,8 @@ export default function Submissions() {
           setVotingFor(null);
           setSelectedRating(5);
           fetchSubmissions();
-          if (user && user.role === 'superadmin') {
-            fetchJudgeVotes();
-          }
+          // Refresh judge votes for all users to show updated ratings
+          fetchJudgeVotes();
         }
   };
 
@@ -183,8 +183,9 @@ export default function Submissions() {
 
   const startVoting = (submissionId) => {
     setVotingFor(submissionId);
-    // Use stored rating if available, otherwise default to 5
-    const storedRating = submissionRatings[submissionId] || 5;
+    // Use existing vote from judge votes if available, otherwise default to 5
+    const existingVote = judgeVotes[submissionId]?.find(vote => vote.judge_id == user.id);
+    const storedRating = existingVote ? existingVote.rating : 5;
     setSelectedRating(storedRating);
   };
 
@@ -422,40 +423,68 @@ export default function Submissions() {
                     )}
                     
                     {/* Rating Display */}
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <span className="text-slate-300 text-sm">Rating:</span>
-                        <span className={`font-bold text-xl ${getRatingColor(sub.averageRating)}`}>
-                          {sub.averageRating > 0 ? sub.averageRating : 'No ratings'}
-                        </span>
-                      </div>
+                    <div className="mb-4">
+                      {/* Show rating based on user role */}
+                      {user && user.role === 'superadmin' ? (
+                        /* Superadmin sees all judge ratings */
+                        judgeVotes[sub.id] ? (
+                          <div className="space-y-2">
+                            <h4 className="text-slate-300 text-sm font-medium">Judge Ratings:</h4>
+                            {judgeVotes[sub.id].map((vote, index) => (
+                              <div key={index} className="flex justify-between items-center p-2 bg-white/5 rounded-xl">
+                                <span className="text-slate-200 text-xs">{vote.judgeName}</span>
+                                <span className={`font-semibold text-sm px-2 py-1 rounded-full ${getRatingColor(vote.rating)} bg-white/10`}>
+                                  {vote.rating}/10
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-slate-400 text-sm">No ratings yet</div>
+                        )
+                      ) : (
+                        /* Judge users see their own rating from fetched judge votes */
+                        (() => {
+                          const userVote = judgeVotes[sub.id]?.find(vote => vote.judge_id == user.id);
+                          return userVote ? (
+                            <div className="space-y-2">
+                              <h4 className="text-slate-300 text-sm font-medium">Your Rating:</h4>
+                              <div className="flex justify-between items-center p-2 bg-white/5 rounded-xl">
+                                <span className="text-slate-200 text-xs">You</span>
+                                <span className={`font-semibold text-sm px-2 py-1 rounded-full ${getRatingColor(userVote.rating)} bg-white/10`}>
+                                  {userVote.rating}/10
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-slate-400 text-sm">Not rated yet</div>
+                          );
+                        })()
+                      )}
+                      
 
                     </div>
 
-                    {/* Judge Votes Display for Superadmin */}
-                    {user && user.role === 'superadmin' && judgeVotes[sub.id] && (
-                      <div className="mt-4 p-3 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10">
-                        <h4 className="text-sm font-semibold text-white mb-2">Judge Votes:</h4>
-                        <div className="space-y-1">
-                          {judgeVotes[sub.id].map((vote, index) => (
-                            <div key={index} className="flex justify-between items-center p-2 bg-white/5 rounded-xl">
-                              <span className="text-slate-200 text-sm">{vote.judgeName}</span>
-                              <span className={`font-semibold text-sm px-2 py-1 rounded-full ${getRatingColor(vote.rating)} bg-white/10`}>
-                                {vote.rating}/10
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+
                     
                     {/* Voting Section - Only for Judges */}
                     {shouldShowVoting && (
                       <div className="mt-4 p-4 bg-blue-600/10 backdrop-blur-sm border border-blue-500/30 rounded-2xl">
                         {votingFor === sub.id ? (
                           <div className="flex flex-col items-center space-y-4">
+                            {/* Show current rating if it exists */}
+                            {(() => {
+                              const existingVote = judgeVotes[sub.id]?.find(vote => vote.judge_id == user.id);
+                              return existingVote ? (
+                                <div className="w-full text-center mb-2 p-2 bg-green-600/20 rounded-xl border border-green-500/30">
+                                  <span className="text-green-200 text-sm">Current Rating: </span>
+                                  <span className="text-green-100 font-bold text-lg">{existingVote.rating}/10</span>
+                                </div>
+                              ) : null;
+                            })()}
+                            
                             <div className="w-full max-w-xs">
-                              <label className="text-blue-200 font-medium text-sm block text-center mb-3">Rating: {selectedRating}/10</label>
+                              <label className="text-blue-200 font-medium text-sm block text-center mb-3">New Rating: {selectedRating}/10</label>
                               <div className="relative">
                                                                  <input
                                    type="range"
@@ -513,7 +542,10 @@ export default function Submissions() {
                             onClick={() => startVoting(sub.id)} 
                             className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-[1.02] shadow-lg hover:from-blue-700 hover:to-blue-800 text-sm"
                           >
-                            🗳️ Rate This Submission
+                            {(() => {
+                              const existingVote = judgeVotes[sub.id]?.find(vote => vote.judge_id == user.id);
+                              return existingVote ? `🗳️ Update Rating (Current: ${existingVote.rating}/10)` : '🗳️ Rate This Submission';
+                            })()}
                           </button>
                         )}
                       </div>
@@ -650,45 +682,68 @@ export default function Submissions() {
                     </a>
                   </div>
 
-                  {/* Rating Only */}
+                  {/* Rating Section */}
                   <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
                       <svg className="h-5 w-5 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                       </svg>
-                      Rating
+                      {user && user.role === 'superadmin' ? 'Judge Ratings' : 'Your Rating'}
                     </h3>
-                    <div>
-                      <span className="text-orange-600 font-medium">Average Rating:</span>
-                      <p className={`text-gray-800 text-2xl font-bold ${getRatingColor(selectedSubmission.averageRating)}`}>
-                        {selectedSubmission.averageRating > 0 ? selectedSubmission.averageRating : 'No ratings'}
-                      </p>
-                    </div>
+                    
+                    {/* Show ratings based on user role */}
+                    {user && user.role === 'superadmin' ? (
+                      /* Superadmin sees all judge ratings */
+                      judgeVotes[selectedSubmission.id] ? (
+                        <div className="space-y-3">
+                          <h4 className="text-gray-700 font-medium text-sm">Individual Judge Ratings:</h4>
+                          {judgeVotes[selectedSubmission.id].map((vote, index) => (
+                            <div key={index} className="flex justify-between items-center p-3 bg-white rounded-xl border border-gray-200">
+                              <span className="text-gray-700 font-medium">{vote.judgeName}</span>
+                              <span className={`font-semibold px-3 py-1 rounded-full ${getRatingColor(vote.rating)} bg-gray-100`}>
+                                {vote.rating}/10
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-gray-500 text-center py-4">
+                          <p className="text-lg">No ratings yet</p>
+                          <p className="text-sm text-gray-400">Judges haven't rated this submission yet.</p>
+                        </div>
+                      )
+                    ) : (
+                      /* Judge users see their own rating from fetched judge votes */
+                      (() => {
+                        console.log('Detail modal - Looking for user vote:', { userId: user.id, submissionId: selectedSubmission.id, judgeVotes: judgeVotes[selectedSubmission.id] });
+                        const userVote = judgeVotes[selectedSubmission.id]?.find(vote => {
+                          console.log('Detail modal - Comparing:', { voteJudgeId: vote.judge_id, userId: user.id, types: { voteJudgeIdType: typeof vote.judge_id, userIdType: typeof user.id } });
+                          return vote.judge_id == user.id; // Use == for loose comparison to handle type differences
+                        });
+                        console.log('Detail modal - Found user vote:', userVote);
+                        return userVote ? (
+                          <div className="space-y-3">
+                            <h4 className="text-gray-700 font-medium text-sm">Your Rating:</h4>
+                            <div className="flex justify-between items-center p-3 bg-white rounded-xl border border-gray-200">
+                              <span className="text-gray-700 font-medium">You</span>
+                              <span className={`font-semibold px-3 py-1 rounded-full ${getRatingColor(userVote.rating)} bg-gray-100`}>
+                                {userVote.rating}/10
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-gray-500 text-center py-4">
+                            <p className="text-lg">Not rated yet</p>
+                            <p className="text-sm text-gray-400">You haven't rated this submission yet.</p>
+                          </div>
+                        );
+                      })()
+                    )}
                   </div>
 
 
 
-                  {/* Judge Votes for Superadmin */}
-                  {user && user.role === 'superadmin' && judgeVotes[selectedSubmission.id] && (
-                    <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200">
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <svg className="h-5 w-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Judge Votes
-                      </h3>
-                      <div className="space-y-3">
-                        {judgeVotes[selectedSubmission.id].map((vote, index) => (
-                          <div key={index} className="flex justify-between items-center p-3 bg-white rounded-xl border border-gray-200">
-                            <span className="text-gray-700">{vote.judgeName}</span>
-                            <span className={`font-semibold px-3 py-1 rounded-full ${getRatingColor(vote.rating)} bg-gray-100`}>
-                              {vote.rating}/10
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+
                 </div>
               </div>
             </div>
