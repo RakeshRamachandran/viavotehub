@@ -1,0 +1,744 @@
+import { useEffect, useState } from 'react';
+import { supabase } from '../utils/supabaseClient';
+import { useAuth } from '../utils/authContext';
+import ProtectedRoute from '../utils/ProtectedRoute';
+import Navigation from '../components/Navigation';
+import ErrorBoundary from '../components/ErrorBoundary';
+
+export default function Submissions() {
+  const [submissions, setSubmissions] = useState([]);
+  const [message, setMessage] = useState('');
+  const [selectedRating, setSelectedRating] = useState(5);
+  const [votingFor, setVotingFor] = useState(null);
+  const [judgeVotes, setJudgeVotes] = useState({});
+  const [submissionRatings, setSubmissionRatings] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const { user, signOut, loading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (authLoading) {
+      return; // Wait for auth to finish loading
+    }
+    
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        await fetchSubmissions();
+        // Only fetch judge votes if user is loaded and has superadmin role
+        if (user && user.role === 'superadmin') {
+          await fetchJudgeVotes();
+        }
+      } catch (error) {
+        console.error('Error loading data:', error);
+        setMessage('Error loading data. Please refresh the page.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadData();
+  }, [user, authLoading]);
+
+  const fetchSubmissions = async () => {
+    // Fetch submissions with their average ratings and vote counts
+    const { data, error } = await supabase
+      .from('submissions')
+      .select(`
+        *,
+        votes (
+          rating
+        )
+      `);
+    
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    // Calculate average ratings and vote counts
+    const submissionsWithRatings = data.map(sub => {
+      const votes = sub.votes || [];
+      const totalRating = votes.reduce((sum, vote) => sum + vote.rating, 0);
+      const averageRating = votes.length > 0 ? (totalRating / votes.length).toFixed(1) : 0;
+      
+      return {
+        ...sub,
+        averageRating: parseFloat(averageRating),
+        voteCount: votes.length
+      };
+    });
+
+    setSubmissions(submissionsWithRatings);
+  };
+
+  const fetchJudgeVotes = async () => {
+    // Fetch all votes with judge information for superadmin view
+    const { data, error } = await supabase
+      .from('votes')
+      .select(`
+        *,
+        users!votes_judge_id_fkey(name, email),
+        submissions!votes_submission_id_fkey(team_member_name)
+      `)
+      .order('submission_id', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching judge votes:', error);
+      return;
+    }
+
+    // Group votes by submission
+    const votesBySubmission = {};
+    data.forEach(vote => {
+      if (!votesBySubmission[vote.submission_id]) {
+        votesBySubmission[vote.submission_id] = [];
+      }
+      votesBySubmission[vote.submission_id].push({
+        judgeName: vote.users.name,
+        judgeEmail: vote.users.email,
+        rating: vote.rating,
+        submissionName: vote.submissions.team_member_name
+      });
+    });
+
+    setJudgeVotes(votesBySubmission);
+  };
+
+  const handleVote = async (submissionId) => {
+    if (!user) {
+      setMessage('Please log in first.');
+      return;
+    }
+
+    if (!shouldShowVoting) {
+      setMessage('Only judges can vote on submissions.');
+      return;
+    }
+
+    if (selectedRating < 1 || selectedRating > 10) {
+      setMessage('Please select a rating between 1 and 10.');
+      return;
+    }
+
+    // Check if user has already voted for this submission
+    const { data: existingVote } = await supabase
+      .from('votes')
+      .select('id')
+      .eq('submission_id', submissionId)
+      .eq('judge_id', user.id)
+      .single();
+
+    let result;
+    if (existingVote) {
+      // Update existing vote
+      result = await supabase
+        .from('votes')
+        .update({ rating: selectedRating })
+        .eq('submission_id', submissionId)
+        .eq('judge_id', user.id);
+    } else {
+      // Insert new vote
+      result = await supabase
+        .from('votes')
+        .insert({
+          submission_id: submissionId,
+          judge_id: user.id,
+          rating: selectedRating
+        });
+    }
+
+    if (result.error) {
+      setMessage(result.error.message);
+            } else {
+          setMessage(`Rating of ${selectedRating} submitted successfully!`);
+          // Save the submitted rating for this submission
+          setSubmissionRatings(prev => ({
+            ...prev,
+            [submissionId]: selectedRating
+          }));
+          setVotingFor(null);
+          setSelectedRating(5);
+          fetchSubmissions();
+          if (user && user.role === 'superadmin') {
+            fetchJudgeVotes();
+          }
+        }
+  };
+
+  const handleLogout = async () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = async () => {
+    await signOut();
+    setShowLogoutConfirm(false);
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutConfirm(false);
+  };
+
+  const startVoting = (submissionId) => {
+    setVotingFor(submissionId);
+    // Use stored rating if available, otherwise default to 5
+    const storedRating = submissionRatings[submissionId] || 5;
+    setSelectedRating(storedRating);
+  };
+
+  const cancelVoting = () => {
+    setVotingFor(null);
+    setSelectedRating(5);
+  };
+
+  const getRatingColor = (rating) => {
+    if (rating >= 8) return 'text-green-600';
+    if (rating >= 6) return 'text-yellow-600';
+    if (rating >= 4) return 'text-orange-600';
+    return 'text-red-600';
+  };
+
+  const canVote = user && user.role === 'judge';
+  const shouldShowVoting = canVote;
+
+  // Don't render if user is not properly loaded
+  if (!user || !user.role) {
+    return (
+      <ErrorBoundary>
+        <ProtectedRoute>
+          <div className="min-h-screen bg-gradient-to-br from-slate-800 via-blue-900 to-slate-900 relative overflow-hidden">
+            {/* Background decorative elements */}
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-600 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-blob"></div>
+              <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-slate-600 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-blob animation-delay-2000"></div>
+              <div className="absolute top-20 left-20 w-40 h-40 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-blob animation-delay-4000"></div>
+            </div>
+            
+            <Navigation />
+            <div className="relative z-10 flex items-center justify-center min-h-screen px-4 py-8">
+              <div className="bg-white/5 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/10 p-8 max-w-md w-full">
+                <div className="text-center">
+                  <div className="mx-auto h-20 w-20 bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl flex items-center justify-center mb-6 shadow-lg">
+                    <svg className="h-10 w-10 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-white mb-2">Loading User Session</h2>
+                  <p className="text-slate-300 mb-6">Please wait while we load your user information...</p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 transform hover:scale-[1.02]"
+                  >
+                    Refresh Page
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ProtectedRoute>
+      </ErrorBoundary>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
+      <ProtectedRoute>
+        <div className="min-h-screen bg-gradient-to-br from-slate-800 via-blue-900 to-slate-900 relative overflow-hidden">
+          {/* Background decorative elements */}
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-600 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-blob"></div>
+            <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-slate-600 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-blob animation-delay-2000"></div>
+            <div className="absolute top-20 left-20 w-40 h-40 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-blob animation-delay-4000"></div>
+          </div>
+
+          {/* Navigation */}
+          <Navigation />
+          
+          {/* Header */}
+          <header className="relative z-10 bg-white/5 backdrop-blur-md border-b border-white/10 sticky top-0">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between items-center py-4">
+                <div className="flex items-center space-x-4">
+                  <div className="h-10 w-10 bg-gradient-to-r from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
+                    <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-bold text-white">Submissions Dashboard</h1>
+                    <p className="text-blue-200 text-sm">Team Evaluation Platform</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="bg-red-600/20 backdrop-blur-sm border border-red-500/30 text-red-300 px-4 py-2 rounded-xl text-sm font-medium transition duration-200 hover:bg-red-600/30 hover:border-red-400/50"
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Content */}
+          <main className="relative z-10 max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
+            {/* Loading State */}
+            {authLoading && (
+              <div className="mb-6 p-4 bg-blue-600/10 backdrop-blur-sm border border-blue-500/30 rounded-2xl">
+                <div className="flex items-center space-x-3">
+                  <svg className="animate-spin h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <p className="text-blue-300">Loading user session...</p>
+                </div>
+              </div>
+            )}
+
+            {/* Error/Success Messages */}
+            {message && (
+              <div className="mb-6 p-4 bg-green-600/10 backdrop-blur-sm border border-green-500/30 rounded-2xl">
+                <div className="flex items-center space-x-3">
+                  <svg className="h-5 w-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-green-300">{message}</p>
+                </div>
+              </div>
+            )}
+            
+            {/* Welcome and Role Information Panel */}
+            {user && (
+              <div className="mb-8 p-6 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="h-16 w-16 bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg">
+                      <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white mb-1">
+                        Welcome back, {user.name}!
+                      </h3>
+                      <p className="text-blue-200">
+                        {user.role === 'superadmin' 
+                          ? 'You have full system access. View all submissions, judge votes, and access admin features.'
+                          : 'You can view all submissions and vote on them using a 1-10 rating scale.'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-white/10 backdrop-blur-sm border border-white/20 text-white">
+                      {user.role === 'superadmin' ? (
+                        <>
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                          </svg>
+                          Super Admin
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          Judge
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Loading State for Submissions */}
+            {isLoading && (
+              <div className="bg-white/5 backdrop-blur-xl p-8 mb-6 border border-white/10 rounded-3xl shadow-2xl">
+                <div className="flex items-center justify-center space-x-4">
+                  <svg className="animate-spin h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <p className="text-blue-200 text-lg">Loading submissions...</p>
+                </div>
+              </div>
+            )}
+
+            {/* Submissions Grid */}
+            {!isLoading && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {submissions.map((sub) => (
+                  <div key={sub.id} className="bg-white/5 backdrop-blur-xl p-6 border border-white/10 rounded-3xl shadow-2xl hover:shadow-3xl transition-all duration-300 hover:bg-white/10">
+                    <div className="flex items-center space-x-3 mb-4">
+                      <div className="h-12 w-12 bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg">
+                        <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-white">{sub.team_member_name}</h2>
+                        <p className="text-blue-200 text-sm">Team Member</p>
+                      </div>
+                    </div>
+                    
+                    <div className="mb-4">
+                      <button
+                        onClick={() => {
+                          setSelectedSubmission(sub);
+                          setShowDetailModal(true);
+                        }}
+                        className="w-full inline-flex items-center justify-center space-x-2 px-4 py-2 bg-green-600/50 backdrop-blur-sm border border-green-500/30 text-green-200 rounded-xl font-medium transition duration-200 hover:bg-green-600/70 hover:text-white"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        <span>View Details</span>
+                      </button>
+                    </div>
+                    
+                    {sub.project_name && (
+                      <p className="text-slate-200 mb-3 text-base">
+                        <span className="text-blue-200 font-medium">📁 Project:</span> {sub.project_name}
+                      </p>
+                    )}
+                    <p className="text-slate-200 mb-4 text-base">
+                      <span className="text-yellow-200 font-medium">📝 Description:</span> 
+                      <span className="text-truncate-2-lines block ml-2">
+                        {sub.problem_description || 'No description'}
+                      </span>
+                    </p>
+                    <p className="text-blue-200 mb-4">⏱️ Hours spent: {sub.hours_spent}</p>
+                    {sub.services_used && (
+                      <p className="text-slate-200 mb-4 text-base">
+                        <span className="text-blue-200 font-medium">🛠️ Services:</span> 
+                        <span className="text-truncate-2-lines block ml-2">
+                          {sub.services_used}
+                        </span>
+                      </p>
+                    )}
+                    
+                    {/* Rating Display */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <span className="text-slate-300 text-sm">Rating:</span>
+                        <span className={`font-bold text-xl ${getRatingColor(sub.averageRating)}`}>
+                          {sub.averageRating > 0 ? sub.averageRating : 'No ratings'}
+                        </span>
+                      </div>
+
+                    </div>
+
+                    {/* Judge Votes Display for Superadmin */}
+                    {user && user.role === 'superadmin' && judgeVotes[sub.id] && (
+                      <div className="mt-4 p-3 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10">
+                        <h4 className="text-sm font-semibold text-white mb-2">Judge Votes:</h4>
+                        <div className="space-y-1">
+                          {judgeVotes[sub.id].map((vote, index) => (
+                            <div key={index} className="flex justify-between items-center p-2 bg-white/5 rounded-xl">
+                              <span className="text-slate-200 text-sm">{vote.judgeName}</span>
+                              <span className={`font-semibold text-sm px-2 py-1 rounded-full ${getRatingColor(vote.rating)} bg-white/10`}>
+                                {vote.rating}/10
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Voting Section - Only for Judges */}
+                    {shouldShowVoting && (
+                      <div className="mt-4 p-4 bg-blue-600/10 backdrop-blur-sm border border-blue-500/30 rounded-2xl">
+                        {votingFor === sub.id ? (
+                          <div className="flex flex-col items-center space-y-4">
+                            <div className="w-full max-w-xs">
+                              <label className="text-blue-200 font-medium text-sm block text-center mb-3">Rating: {selectedRating}/10</label>
+                              <div className="relative">
+                                                                 <input
+                                   type="range"
+                                   min="1"
+                                   max="10"
+                                   value={selectedRating}
+                                   onChange={(e) => setSelectedRating(parseInt(e.target.value))}
+                                   className="w-full h-3 bg-white/20 rounded-lg appearance-none cursor-pointer slider"
+                                   style={{
+                                     background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${((selectedRating - 1) / 9) * 100}%, rgba(255, 255, 255, 0.2) ${((selectedRating - 1) / 9) * 100}%, rgba(255, 255, 255, 0.2) 100%)`
+                                   }}
+                                 />
+                                <div className="flex justify-between text-xs text-slate-400 mt-2">
+                                  <span>1</span>
+                                  <span>5</span>
+                                  <span>10</span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Quick Rating Buttons */}
+                            <div className="flex justify-center space-x-1">
+                              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rating) => (
+                                <button
+                                  key={rating}
+                                  onClick={() => setSelectedRating(rating)}
+                                  className={`w-8 h-8 rounded text-xs font-medium transition-all duration-200 ${
+                                    selectedRating === rating
+                                      ? 'bg-blue-600 text-white border border-blue-500'
+                                      : 'bg-white/10 text-slate-300 border border-white/20 hover:bg-white/20 hover:text-white'
+                                  }`}
+                                >
+                                  {rating}
+                                </button>
+                              ))}
+                            </div>
+                            
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => handleVote(sub.id)}
+                                className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-2 rounded-xl font-semibold shadow-lg hover:from-green-700 hover:to-green-800 transition-all duration-200 transform hover:scale-[1.02] text-sm"
+                              >
+                                Submit Rating
+                              </button>
+                              <button
+                                onClick={cancelVoting}
+                                className="bg-slate-600/50 backdrop-blur-sm border border-slate-500/30 text-slate-200 px-4 py-2 rounded-xl font-semibold transition duration-200 hover:bg-slate-600/70 text-sm"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => startVoting(sub.id)} 
+                            className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-[1.02] shadow-lg hover:from-blue-700 hover:to-blue-800 text-sm"
+                          >
+                            🗳️ Rate This Submission
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </main>
+
+          {/* Submission Detail Modal */}
+          {showDetailModal && selectedSubmission && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-gray-800">Submission Details</h2>
+                </div>
+                
+                {/* Floating Close Button */}
+                <button
+                  onClick={() => {
+                    setShowDetailModal(false);
+                    setSelectedSubmission(null);
+                  }}
+                  className="absolute top-4 right-4 p-3 bg-white hover:bg-gray-100 text-gray-600 rounded-full shadow-lg border border-gray-200 transition duration-200 hover:shadow-xl z-10"
+                >
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+                
+                <div className="space-y-6">
+                  {/* Team Member Info */}
+                  <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                      <svg className="h-5 w-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      Team Member Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-blue-600 font-medium">Name:</span>
+                        <p className="text-gray-800 text-lg font-semibold">{selectedSubmission.team_member_name}</p>
+                      </div>
+                      <div>
+                        <span className="text-blue-600 font-medium">Hours Spent:</span>
+                        <p className="text-gray-800 text-lg">{selectedSubmission.hours_spent}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Project Info */}
+                  {selectedSubmission.project_name && (
+                    <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200">
+                      <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                        <svg className="h-5 w-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                        Project Information
+                      </h3>
+                      <p className="text-gray-800 text-lg">{selectedSubmission.project_name}</p>
+                    </div>
+                  )}
+
+                  {/* Problem Description */}
+                  <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                      <svg className="h-5 w-5 mr-2 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Problem Description
+                    </h3>
+                    <p className="text-gray-700 whitespace-pre-wrap">{selectedSubmission.problem_description}</p>
+                  </div>
+
+                  {/* Services Used */}
+                  {selectedSubmission.services_used && (
+                    <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200">
+                      <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                        <svg className="h-5 w-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Services Used
+                      </h3>
+                      <p className="text-gray-700 whitespace-pre-wrap">{selectedSubmission.services_used}</p>
+                    </div>
+                  )}
+
+                  {/* Git Repository URL */}
+                  <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                      <svg className="h-5 w-5 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                      </svg>
+                      Git Repository
+                    </h3>
+                    {selectedSubmission.git_repo_url ? (
+                      <a 
+                        href={selectedSubmission.git_repo_url} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="inline-flex items-center space-x-2 text-orange-600 hover:text-orange-700 underline transition duration-200 text-lg break-all"
+                      >
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                        </svg>
+                        <span>{selectedSubmission.git_repo_url}</span>
+                      </a>
+                    ) : (
+                      <p className="text-gray-500 text-lg">No repository linked</p>
+                    )}
+                  </div>
+
+                  {/* Submission Link */}
+                  <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                      <svg className="h-5 w-5 mr-2 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      Attachments
+                    </h3>
+                    <a 
+                      href={selectedSubmission.submission_link} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="inline-flex items-center space-x-2 text-cyan-600 hover:text-cyan-700 underline transition duration-200 text-lg"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      <span>Open </span>
+                    </a>
+                  </div>
+
+                  {/* Rating Only */}
+                  <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                      <svg className="h-5 w-5 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                      </svg>
+                      Rating
+                    </h3>
+                    <div>
+                      <span className="text-orange-600 font-medium">Average Rating:</span>
+                      <p className={`text-gray-800 text-2xl font-bold ${getRatingColor(selectedSubmission.averageRating)}`}>
+                        {selectedSubmission.averageRating > 0 ? selectedSubmission.averageRating : 'No ratings'}
+                      </p>
+                    </div>
+                  </div>
+
+
+
+                  {/* Judge Votes for Superadmin */}
+                  {user && user.role === 'superadmin' && judgeVotes[selectedSubmission.id] && (
+                    <div className="p-6 bg-gray-50 rounded-2xl border border-gray-200">
+                      <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                        <svg className="h-5 w-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Judge Votes
+                      </h3>
+                      <div className="space-y-3">
+                        {judgeVotes[selectedSubmission.id].map((vote, index) => (
+                          <div key={index} className="flex justify-between items-center p-3 bg-white rounded-xl border border-gray-200">
+                            <span className="text-gray-700">{vote.judgeName}</span>
+                            <span className={`font-semibold px-3 py-1 rounded-full ${getRatingColor(vote.rating)} bg-gray-100`}>
+                              {vote.rating}/10
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Logout Confirmation Overlay */}
+          {showLogoutConfirm && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl p-8 max-w-md w-full">
+                <div className="text-center">
+                  {/* Icon */}
+                  <div className="mx-auto h-16 w-16 bg-red-600/20 rounded-2xl flex items-center justify-center mb-6 shadow-lg">
+                    <svg className="h-8 w-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </div>
+                  
+                  {/* Title */}
+                  <h3 className="text-xl font-bold text-white mb-2">Confirm Logout</h3>
+                  
+                  {/* Message */}
+                  <p className="text-slate-300 mb-6">
+                    Are you sure you want to logout, <span className="font-semibold text-white">{user?.name}</span>?
+                    <br />
+                    <span className="text-sm text-slate-400">
+                      ({user?.role === 'superadmin' ? 'Super Admin' : 'Judge'})
+                    </span>
+                  </p>
+                  
+                  {/* Buttons */}
+                  <div className="flex space-x-4">
+                    <button
+                      onClick={cancelLogout}
+                      className="flex-1 px-6 py-3 bg-slate-600/50 backdrop-blur-sm border border-slate-500/30 text-slate-200 rounded-xl font-semibold transition duration-200 hover:bg-slate-600/70 hover:border-slate-400/50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={confirmLogout}
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl font-semibold shadow-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-[1.02]"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </ProtectedRoute>
+    </ErrorBoundary>
+  );
+}
