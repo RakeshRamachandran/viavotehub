@@ -551,6 +551,23 @@ export default function Submissions() {
                       </p>
                     )}
                     
+                    {/* Drive Link */}
+                    {sub.submission_link && (
+                      <div className="mb-4">
+                        <a 
+                          href={sub.submission_link} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="inline-flex items-center space-x-2 text-cyan-400 hover:text-cyan-300 underline transition duration-200 text-sm"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                          <span>Drive Link</span>
+                        </a>
+                      </div>
+                    )}
+                    
                     {/* Rating Display */}
                     <div className="mb-4">
                       {/* Show rating based on user role */}
@@ -845,7 +862,7 @@ export default function Submissions() {
                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
-                      <span>Drive Link </span>
+                      <span>Video Link </span>
                     </a>
                   </div>
 
