@@ -7,6 +7,8 @@ import ErrorBoundary from '../components/ErrorBoundary';
 
 export default function Submissions() {
   const [submissions, setSubmissions] = useState([]);
+  const [filteredSubmissions, setFilteredSubmissions] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [message, setMessage] = useState('');
   const [selectedRating, setSelectedRating] = useState(5);
   const [remarks, setRemarks] = useState('');
@@ -18,6 +20,49 @@ export default function Submissions() {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
   const { user, signOut, loading: authLoading } = useAuth();
+
+  // Custom scrollbar styles
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 10px;
+        margin: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 10px;
+        border: 2px solid #f1f5f9;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+      .custom-scrollbar::-webkit-scrollbar-corner {
+        background: transparent;
+      }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
+  // Filter submissions based on search term
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredSubmissions(submissions);
+    } else {
+      const filtered = submissions.filter(sub =>
+        sub.team_member_name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredSubmissions(filtered);
+    }
+  }, [searchTerm, submissions]);
 
   useEffect(() => {
     if (authLoading) {
@@ -211,6 +256,17 @@ export default function Submissions() {
   const canVote = user && user.role === 'judge';
   const shouldShowVoting = canVote;
 
+  // Function to highlight search terms in text
+  const highlightSearchTerm = (text, searchTerm) => {
+    if (!searchTerm || !text) return text;
+    
+    const regex = new RegExp(`(${searchTerm})`, 'gi');
+    return text.replace(regex, '<mark class="bg-yellow-400/30 text-yellow-200 px-1 rounded">$1</mark>');
+  };
+
+  // Get unique team member names for suggestions
+  const uniqueTeamMembers = [...new Set(submissions.map(sub => sub.team_member_name))].sort();
+
   // Don't render if user is not properly loaded
   if (!user || !user.role) {
     return (
@@ -375,10 +431,73 @@ export default function Submissions() {
               </div>
             )}
 
+            {/* Search Input */}
+            <div className="mb-6 p-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search submissions by team member name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setSearchTerm('');
+                      e.target.blur();
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-slate-400 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition-all duration-200"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-slate-400 hover:text-white transition-colors duration-200"
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+                
+
+              </div>
+            </div>
+
             {/* Submissions Grid */}
             {!isLoading && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {submissions.map((sub) => (
+              <>
+                {filteredSubmissions.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="bg-white/5 backdrop-blur-xl p-8 border border-white/10 rounded-3xl shadow-2xl">
+                      <div className="h-20 w-20 bg-slate-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <svg className="h-10 w-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-3.042 0-5.824-1.135-7.938-3M9 12H5a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-xl font-semibold text-white mb-2">
+                        {searchTerm ? 'No Search Results Found' : 'No Submissions Available'}
+                      </h3>
+                      <p className="text-slate-300 mb-4">
+                        {searchTerm 
+                          ? `No submissions found for "${searchTerm}". Try adjusting your search terms.`
+                          : 'There are currently no submissions in the system.'
+                        }
+                      </p>
+                      {searchTerm && (
+                        <button
+                          onClick={() => setSearchTerm('')}
+                          className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600/50 backdrop-blur-sm border border-blue-500/30 text-blue-200 rounded-xl font-medium transition duration-200 hover:bg-blue-600/70 hover:text-white"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          <span>Clear Search</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {filteredSubmissions.map((sub) => (
                   <div key={sub.id} className="bg-white/5 backdrop-blur-xl p-6 border border-white/10 rounded-3xl shadow-2xl hover:shadow-3xl transition-all duration-300 hover:bg-white/10">
                     <div className="flex items-center space-x-3 mb-4">
                       <div className="h-12 w-12 bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg">
@@ -386,10 +505,13 @@ export default function Submissions() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                         </svg>
                       </div>
-                      <div>
-                        <h2 className="text-xl font-bold text-white">{sub.team_member_name}</h2>
-                        <p className="text-blue-200 text-sm">Team Member</p>
-                      </div>
+                                              <div>
+                          <h2 className="text-xl font-bold text-white" 
+                              dangerouslySetInnerHTML={{ 
+                                __html: highlightSearchTerm(sub.team_member_name, searchTerm) 
+                              }} />
+                          <p className="text-blue-200 text-sm">Team Member</p>
+                        </div>
                     </div>
                     
                     <div className="mb-4">
@@ -586,30 +708,41 @@ export default function Submissions() {
                     )}
                   </div>
                 ))}
-              </div>
-            )}
-          </main>
+                </div>
+              )}
+            </>
+          )}
+        </main>
 
           {/* Submission Detail Modal */}
           {showDetailModal && selectedSubmission && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
-                <div className="mb-6">
-                  <h2 className="text-2xl font-bold text-gray-800">Submission Details</h2>
-                </div>
-                
-                {/* Floating Close Button */}
+            <div 
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => {
+                setShowDetailModal(false);
+                setSelectedSubmission(null);
+              }}
+            >
+              <div 
+                className="bg-white rounded-3xl shadow-2xl p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto relative custom-scrollbar"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Close Button - Inside Modal */}
                 <button
                   onClick={() => {
                     setShowDetailModal(false);
                     setSelectedSubmission(null);
                   }}
-                  className="absolute top-4 right-4 p-3 bg-white hover:bg-gray-100 text-gray-600 rounded-full shadow-lg border border-gray-200 transition duration-200 hover:shadow-xl z-10"
+                  className="absolute top-6 right-6 p-2 bg-white hover:bg-gray-100 text-gray-600 rounded-full shadow-lg border border-gray-200 transition duration-200 hover:shadow-xl z-10"
                 >
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
+                
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-gray-800">Submission Details</h2>
+                </div>
                 
                 <div className="space-y-6">
                   {/* Team Member Info */}
@@ -712,7 +845,7 @@ export default function Submissions() {
                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
-                      <span>Open </span>
+                      <span>Drive Link </span>
                     </a>
                   </div>
 
@@ -749,12 +882,7 @@ export default function Submissions() {
                     ) : (
                       /* Judge users see their own rating from fetched judge votes */
                       (() => {
-                        console.log('Detail modal - Looking for user vote:', { userId: user.id, submissionId: selectedSubmission.id, judgeVotes: judgeVotes[selectedSubmission.id] });
-                        const userVote = judgeVotes[selectedSubmission.id]?.find(vote => {
-                          console.log('Detail modal - Comparing:', { voteJudgeId: vote.judge_id, userId: user.id, types: { voteJudgeIdType: typeof vote.judge_id, userIdType: typeof user.id } });
-                          return vote.judge_id == user.id; // Use == for loose comparison to handle type differences
-                        });
-                        console.log('Detail modal - Found user vote:', userVote);
+                        const userVote = judgeVotes[selectedSubmission.id]?.find(vote => vote.judge_id == user.id);
                         return userVote ? (
                           <div className="space-y-3">
                             <h4 className="text-gray-700 font-medium text-sm">Your Rating:</h4>
@@ -772,6 +900,108 @@ export default function Submissions() {
                           </div>
                         );
                       })()
+                    )}
+
+                    {/* Rating Input Section - Only for Judges */}
+                    {shouldShowVoting && (
+                      <div className="mt-6 p-4 bg-blue-50 rounded-2xl border border-blue-200">
+                        <h4 className="text-blue-800 font-medium text-sm mb-4 text-center">Rate This Submission</h4>
+                        
+                        {/* Show current rating if it exists */}
+                        {(() => {
+                          const existingVote = judgeVotes[selectedSubmission.id]?.find(vote => vote.judge_id == user.id);
+                          return existingVote ? (
+                            <div className="w-full text-center mb-4 p-3 bg-green-100 rounded-xl border border-green-200">
+                              <span className="text-green-700 text-sm">Current Rating: </span>
+                              <span className="text-green-800 font-bold text-lg">{existingVote.rating}/10</span>
+                              {existingVote.remarks && (
+                                <div className="mt-2 text-left">
+                                  <span className="text-green-700 text-sm block mb-1">Current Remarks:</span>
+                                  <div className="text-green-800 text-sm bg-green-200 rounded-lg p-2 border border-green-300">
+                                    {existingVote.remarks}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : null;
+                        })()}
+                        
+                        {/* Rating Slider */}
+                        <div className="w-full max-w-xs mx-auto mb-4">
+                          <label className="text-blue-800 font-medium text-sm block text-center mb-3">New Rating: {selectedRating}/10</label>
+                          <div className="relative">
+                            <input
+                              type="range"
+                              min="1"
+                              max="10"
+                              value={selectedRating}
+                              onChange={(e) => setSelectedRating(parseInt(e.target.value))}
+                              className="w-full h-3 bg-blue-200 rounded-lg appearance-none cursor-pointer slider"
+                              style={{
+                                background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${((selectedRating - 1) / 9) * 100}%, #dbeafe ${((selectedRating - 1) / 9) * 100}%, #dbeafe 100%)`
+                              }}
+                            />
+                            <div className="flex justify-between text-xs text-blue-600 mt-2">
+                              <span>1</span>
+                              <span>5</span>
+                              <span>10</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Quick Rating Buttons */}
+                        <div className="flex justify-center space-x-1 mb-4">
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rating) => (
+                            <button
+                              key={rating}
+                              onClick={() => setSelectedRating(rating)}
+                              className={`w-8 h-8 rounded text-xs font-medium transition-all duration-200 ${
+                                selectedRating === rating
+                                  ? 'bg-blue-600 text-white border border-blue-500'
+                                  : 'bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 hover:border-blue-300'
+                              }`}
+                            >
+                              {rating}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        {/* Remarks Field */}
+                        <div className="w-full max-w-md mx-auto mb-4">
+                          <label htmlFor={`modal-remarks-${selectedSubmission.id}`} className="block text-blue-800 font-medium text-sm mb-2 text-center">
+                            Remarks (Optional)
+                          </label>
+                          <textarea
+                            id={`modal-remarks-${selectedSubmission.id}`}
+                            value={remarks}
+                            onChange={(e) => setRemarks(e.target.value)}
+                            placeholder="Add your comments or feedback about this submission..."
+                            className="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-sm resize-none"
+                            rows="3"
+                            maxLength="500"
+                          />
+                          <div className="text-right text-xs text-blue-600 mt-1">
+                            {remarks.length}/500
+                          </div>
+                        </div>
+                        
+                        {/* Submit Button */}
+                        <div className="flex justify-center">
+                          <button
+                            onClick={() => {
+                              handleVote(selectedSubmission.id);
+                              // Close modal after successful submission
+                              setTimeout(() => {
+                                setShowDetailModal(false);
+                                setSelectedSubmission(null);
+                              }, 1500);
+                            }}
+                            className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 transform hover:scale-[1.02]"
+                          >
+                            Submit Rating
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
 
