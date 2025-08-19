@@ -226,6 +226,8 @@ export default function Submissions() {
     setShowLogoutConfirm(false);
   };
 
+
+
   const cancelLogout = () => {
     setShowLogoutConfirm(false);
   };
@@ -551,20 +553,18 @@ export default function Submissions() {
                       </p>
                     )}
                     
-                    {/* Drive Link */}
+                    {/* Submission Link Button */}
                     {sub.submission_link && (
                       <div className="mb-4">
-                        <a 
-                          href={sub.submission_link} 
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="inline-flex items-center space-x-2 text-cyan-400 hover:text-cyan-300 underline transition duration-200 text-sm"
+                        <button
+                          onClick={() => window.open(sub.submission_link, '_blank', 'noopener,noreferrer')}
+                          className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 text-sm bg-cyan-600/50 hover:bg-cyan-600/70 text-cyan-200 hover:text-white border border-cyan-500/30 hover:border-cyan-400/50"
                         >
                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                           </svg>
-                          <span>Drive Link</span>
-                        </a>
+                          <span>Open Video</span>
+                        </button>
                       </div>
                     )}
                     
@@ -853,17 +853,15 @@ export default function Submissions() {
                       </svg>
                       Attachments
                     </h3>
-                    <a 
-                      href={selectedSubmission.submission_link} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="inline-flex items-center space-x-2 text-cyan-600 hover:text-cyan-700 underline transition duration-200 text-lg"
+                    <button
+                      onClick={() => window.open(selectedSubmission.submission_link, '_blank', 'noopener,noreferrer')}
+                      className="inline-flex items-center justify-center space-x-3 px-6 py-3 rounded-2xl font-semibold transition-all duration-300 transform hover:scale-[1.02] shadow-lg bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white hover:shadow-cyan-500/40 hover:shadow-xl border-2 border-cyan-400/20 hover:border-cyan-300/40"
                     >
                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
-                      <span>Video Link </span>
-                    </a>
+                      <span className="text-base">Open Video</span>
+                    </button>
                   </div>
 
                   {/* Rating Section */}
