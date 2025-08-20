@@ -1,7 +1,7 @@
 {
   "name": "VIA VoteHub",
   "short_name": "VIA VoteHub",
-  "description": "A modern voting hub application for VIA",
+  "description": "A modern voting hub application for VIA - Install for the best mobile experience",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
@@ -10,6 +10,14 @@
   "scope": "/",
   "lang": "en",
   "categories": ["productivity", "business"],
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
   "icons": [
     {
       "src": "/favicon.svg",
@@ -48,6 +56,32 @@
           "sizes": "96x96"
         }
       ]
+    },
+    {
+      "name": "Analytics",
+      "short_name": "Analytics",
+      "description": "View voting analytics and reports",
+      "url": "/analytics",
+      "icons": [
+        {
+          "src": "/favicon.svg",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
     }
   ]
 }

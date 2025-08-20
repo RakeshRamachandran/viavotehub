@@ -1,0 +1,64 @@
+warning: in the working copy of 'pages/submissions.js', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/pages/submissions.js b/pages/submissions.js[m
+[1mindex 6245ff9..5595160 100644[m
+[1m--- a/pages/submissions.js[m
+[1m+++ b/pages/submissions.js[m
+[36m@@ -226,6 +226,8 @@[m [mexport default function Submissions() {[m
+     setShowLogoutConfirm(false);[m
+   };[m
+ [m
+[32m+[m
+[32m+[m
+   const cancelLogout = () => {[m
+     setShowLogoutConfirm(false);[m
+   };[m
+[36m@@ -551,20 +553,18 @@[m [mexport default function Submissions() {[m
+                       </p>[m
+                     )}[m
+                     [m
+[31m-                    {/* Drive Link */}[m
+[32m+[m[32m                    {/* Submission Link Button */}[m
+                     {sub.submission_link && ([m
+                       <div className="mb-4">[m
+[31m-                        <a [m
+[31m-                          href={sub.submission_link} [m
+[31m-                          target="_blank" [m
+[31m-                          rel="noreferrer"[m
+[31m-                          className="inline-flex items-center space-x-2 text-cyan-400 hover:text-cyan-300 underline transition duration-200 text-sm"[m
+[32m+[m[32m                        <button[m
+[32m+[m[32m                          onClick={() => window.open(sub.submission_link, '_blank', 'noopener,noreferrer')}[m
+[32m+[m[32m                          className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl font-medium transition-all duration-200 text-sm bg-cyan-600/50 hover:bg-cyan-600/70 text-cyan-200 hover:text-white border border-cyan-500/30 hover:border-cyan-400/50"[m
+                         >[m
+                           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">[m
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />[m
+                           </svg>[m
+[31m-                          <span>Video Link</span>[m
+[31m-                        </a>[m
+[32m+[m[32m                          <span>Open Video</span>[m
+[32m+[m[32m                        </button>[m
+                       </div>[m
+                     )}[m
+                     [m
+[36m@@ -853,17 +853,15 @@[m [mexport default function Submissions() {[m
+                       </svg>[m
+                       Attachments[m
+                     </h3>[m
+[31m-                    <a [m
+[31m-                      href={selectedSubmission.submission_link} [m
+[31m-                      target="_blank" [m
+[31m-                      rel="noreferrer"[m
+[31m-                      className="inline-flex items-center space-x-2 text-cyan-600 hover:text-cyan-700 underline transition duration-200 text-lg"[m
+[32m+[m[32m                    <button[m
+[32m+[m[32m                      onClick={() => window.open(selectedSubmission.submission_link, '_blank', 'noopener,noreferrer')}[m
+[32m+[m[32m                      className="inline-flex items-center justify-center space-x-3 px-6 py-3 rounded-2xl font-semibold transition-all duration-300 transform hover:scale-[1.02] shadow-lg bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white hover:shadow-cyan-500/40 hover:shadow-xl border-2 border-cyan-400/20 hover:border-cyan-300/40"[m
+                     >[m
+                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">[m
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />[m
+                       </svg>[m
+[31m-                      <span>Video Link </span>[m
+[31m-                    </a>[m
+[32m+[m[32m                      <span className="text-base">Open Video</span>[m
+[32m+[m[32m                    </button>[m
+                   </div>[m
+ [m
+                   {/* Rating Section */}[m
