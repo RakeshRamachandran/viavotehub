@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Favicon Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .favicon-preview {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .favicon-svg {
+            width: 64px;
+            height: 64px;
+        }
+        .instructions {
+            background: #f0f9ff;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+        .code {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>VIA VoteHub - Favicon Generator</h1>
+    
+    <div class="favicon-preview">
+        <div>
+            <h3>SVG Favicon Preview:</h3>
+            <img src="/favicon.svg" alt="Favicon" class="favicon-svg">
+        </div>
+        <div>
+            <h3>Current Favicon Files:</h3>
+            <ul>
+                <li>✅ <code>/favicon.svg</code> - Vector favicon (created)</li>
+                <li>⚠️ <code>/favicon.png</code> - PNG favicon (placeholder)</li>
+                <li>✅ <code>/manifest.json</code> - Web app manifest (created)</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="instructions">
+        <h3>Next Steps:</h3>
+        <p>To complete your favicon setup, you need to:</p>
+        
+        <h4>1. Generate PNG Favicon:</h4>
+        <p>Convert the SVG to PNG using one of these methods:</p>
+        <ul>
+            <li><strong>Online Converter:</strong> Use <a href="https://convertio.co/svg-png/" target="_blank">Convertio</a> or <a href="https://cloudconvert.com/svg-to-png" target="_blank">CloudConvert</a></li>
+            <li><strong>Command Line:</strong> Use ImageMagick: <span class="code">magick favicon.svg favicon.png</span></li>
+            <li><strong>Browser:</strong> Open the SVG in a browser and take a screenshot</li>
+        </ul>
+        
+        <h4>2. Generate ICO Favicon (Optional):</h4>
+        <p>For maximum browser compatibility, create an ICO file:</p>
+        <ul>
+            <li>Use <a href="https://favicon.io/favicon-converter/" target="_blank">Favicon.io</a> to generate multiple sizes</li>
+            <li>Or use <a href="https://www.icoconverter.com/" target="_blank">ICO Converter</a></li>
+        </ul>
+        
+        <h4>3. Test Your Favicon:</h4>
+        <p>After generating the files:</p>
+        <ul>
+            <li>Restart your Next.js development server</li>
+            <li>Check the browser tab to see the favicon</li>
+            <li>Test in different browsers</li>
+        </ul>
+    </div>
+
+    <h3>Current Favicon Configuration:</h3>
+    <p>Your <code>_document.js</code> is already configured with:</p>
+    <pre class="code"><link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="icon" type="image/png" href="/favicon.png" />
+<link rel="shortcut icon" href="/favicon.png" />
+<link rel="apple-touch-icon" href="/favicon.svg" />
+<link rel="manifest" href="/manifest.json" /></pre>
+    
+    <p><strong>Note:</strong> The SVG favicon is already working! You just need to generate the PNG version for better browser compatibility.</p>
+</body>
+</html>
