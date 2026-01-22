@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
-import { createSubmission, updateSubmission, deleteSubmission } from '../utils/authUtils';
+import { createSubmission, updateSubmission, deleteSubmission, createUser, resetUserPassword } from '../utils/authUtils';
 import { useAuth } from '../utils/authContext';
 import ProtectedRoute from '../utils/ProtectedRoute';
 import Navigation from '../components/Navigation';
@@ -31,6 +31,17 @@ export default function Admin() {
     servicesUsed: '',
     gitRepoUrl: '',
     category: 'Via Hackathon'
+  });
+
+  // Users management state
+  const [activeTab, setActiveTab] = useState('submissions'); // 'submissions' or 'users'
+  const [usersList, setUsersList] = useState([]);
+  const [showCreateUserForm, setShowCreateUserForm] = useState(false);
+  const [userFormData, setUserFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'judge'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState('');
@@ -196,6 +207,116 @@ export default function Admin() {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('id', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setUsersList(data || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      setMessage(`Error fetching users: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Effect to fetch users when switching to users tab
+  useEffect(() => {
+    if (activeTab === 'users' && (isSuperAdmin || isJudge)) {
+      fetchUsers();
+    }
+  }, [activeTab, isSuperAdmin, isJudge]);
+
+  const handleUserInputChange = (e) => {
+    const { name, value } = e.target;
+    setUserFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setMessage('');
+
+    try {
+      if (!userFormData.email || !userFormData.password || !userFormData.name) {
+        throw new Error('All fields are required');
+      }
+
+      const result = await createUser(
+        userFormData.email,
+        userFormData.name,
+        userFormData.password,
+        userFormData.role
+      );
+
+      if (result.success) {
+        setMessage(`User ${userFormData.name} created successfully!`);
+        setUserFormData({
+          name: '',
+          email: '',
+          password: '',
+          role: 'judge'
+        });
+        setShowCreateUserForm(false);
+        fetchUsers();
+      } else {
+        setMessage(`Error: ${result.error}`);
+      }
+    } catch (error) {
+      setMessage(`Error: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+  const [selectedUserForReset, setSelectedUserForReset] = useState(null);
+  const [newPasswordValue, setNewPasswordValue] = useState('');
+
+  const initiatePasswordReset = (userItem) => {
+    setSelectedUserForReset(userItem);
+    setNewPasswordValue('');
+    setShowResetPasswordModal(true);
+  };
+
+  const handlePasswordReset = async (e) => {
+    e.preventDefault();
+    if (!newPasswordValue) {
+      setMessage('Password cannot be empty');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const result = await resetUserPassword(selectedUserForReset.id, newPasswordValue);
+
+      if (result.success) {
+        setMessage(`Password reset successfully for ${selectedUserForReset.name}`);
+        setShowResetPasswordModal(false);
+        setSelectedUserForReset(null);
+        setNewPasswordValue('');
+      } else {
+        setMessage(`Error resetting password: ${result.error}`);
+      }
+    } catch (error) {
+      setMessage(`Error: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -629,184 +750,222 @@ Type "DELETE" to confirm:`;
           {/* Superadmin Controls */}
           {isSuperAdmin && (
             <div className="mb-8 p-6 bg-blue-600/10 backdrop-blur-xl border border-blue-500/30 rounded-3xl shadow-2xl">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-blue-200">Submission Management</h2>
+              <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
+                {/* Tabs */}
+                <div className="flex space-x-1 bg-slate-800/50 p-1 rounded-xl backdrop-blur-md">
+                  <button
+                    onClick={() => setActiveTab('submissions')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${activeTab === 'submissions'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      }`}
+                  >
+                    Submissions
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('users')}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${activeTab === 'users'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      }`}
+                  >
+                    Users
+                  </button>
+                </div>
+
                 <div className="flex space-x-3">
-                  <button
-                    onClick={fetchSubmissions}
-                    disabled={isLoading}
-                    className="px-4 py-3 bg-slate-600/50 backdrop-blur-sm border border-slate-500/30 text-slate-200 rounded-xl font-semibold transition duration-200 hover:bg-slate-600/70 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? (
-                      <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    ) : (
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setShowCreateForm(!showCreateForm)}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 transform hover:scale-[1.02]"
-                  >
-                    {showCreateForm ? 'Cancel' : 'Create New Submission'}
-                  </button>
+                  {activeTab === 'users' ? (
+                    <button
+                      onClick={() => setShowCreateUserForm(!showCreateUserForm)}
+                      className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-semibold shadow-lg hover:from-purple-700 hover:to-purple-800 transition-all duration-200 transform hover:scale-[1.02]"
+                    >
+                      {showCreateUserForm ? 'Cancel' : 'Add New User'}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={fetchSubmissions}
+                        disabled={isLoading}
+                        className="px-4 py-3 bg-slate-600/50 backdrop-blur-sm border border-slate-500/30 text-slate-200 rounded-xl font-semibold transition duration-200 hover:bg-slate-600/70 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isLoading ? (
+                          <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setShowCreateForm(!showCreateForm)}
+                        className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 transform hover:scale-[1.02]"
+                      >
+                        {showCreateForm ? 'Cancel' : 'Create New Submission'}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {showCreateForm && (
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-blue-200 mb-2">
-                      Category
-                    </label>
-                    <div className="relative">
-                      <select
-                        name="category"
-                        value={formData.category}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 appearance-none"
-                      >
-                        <option value="Via Cursor Project" className="bg-slate-800">Via Cursor Project</option>
-                        <option value="Via Hackathon" className="bg-slate-800">Via Hackathon</option>
-                      </select>
-                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-white">
-                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                          <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                        </svg>
+              {activeTab === 'submissions' && (
+                <>
+                  {showCreateForm && (
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-blue-200 mb-2">
+                          Category
+                        </label>
+                        <div className="relative">
+                          <select
+                            name="category"
+                            value={formData.category}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 appearance-none"
+                          >
+                            <option value="Via Cursor Project" className="bg-slate-800">Via Cursor Project</option>
+                            <option value="Via Hackathon" className="bg-slate-800">Via Hackathon</option>
+                          </select>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-white">
+                            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                              <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                            </svg>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-blue-200 mb-2">
-                        Team Member Name
-                      </label>
-                      <input
-                        type="text"
-                        name="teamMemberName"
-                        value={formData.teamMemberName}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                        placeholder="Enter team member name"
-                      />
-                    </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-blue-200 mb-2">
+                            Team Member Name
+                          </label>
+                          <input
+                            type="text"
+                            name="teamMemberName"
+                            value={formData.teamMemberName}
+                            onChange={handleInputChange}
+                            required
+                            className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                            placeholder="Enter team member name"
+                          />
+                        </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-blue-200 mb-2">
-                        Submission Link
-                      </label>
-                      <input
-                        type="url"
-                        name="submissionLink"
-                        value={formData.submissionLink}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                        placeholder="https://example.com/project"
-                      />
-                    </div>
-                  </div>
+                        <div>
+                          <label className="block text-sm font-medium text-blue-200 mb-2">
+                            Submission Link
+                          </label>
+                          <input
+                            type="url"
+                            name="submissionLink"
+                            value={formData.submissionLink}
+                            onChange={handleInputChange}
+                            required
+                            className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                            placeholder="https://example.com/project"
+                          />
+                        </div>
+                      </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-blue-200 mb-2">
-                      Problem Description
-                    </label>
-                    <textarea
-                      name="problemDescription"
-                      value={formData.problemDescription}
-                      onChange={handleInputChange}
-                      required
-                      rows="3"
-                      className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      placeholder="Describe the problem or project"
-                    />
-                  </div>
+                      <div>
+                        <label className="block text-sm font-medium text-blue-200 mb-2">
+                          Problem Description
+                        </label>
+                        <textarea
+                          name="problemDescription"
+                          value={formData.problemDescription}
+                          onChange={handleInputChange}
+                          required
+                          rows="3"
+                          className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          placeholder="Describe the problem or project"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-blue-200 mb-2">
-                      Hours Spent
-                    </label>
-                    <input
-                      type="number"
-                      name="hoursSpent"
-                      value={formData.hoursSpent}
-                      onChange={handleInputChange}
-                      required
-                      min="1"
-                      className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      placeholder="Enter hours spent"
-                    />
-                  </div>
+                      <div>
+                        <label className="block text-sm font-medium text-blue-200 mb-2">
+                          Hours Spent
+                        </label>
+                        <input
+                          type="number"
+                          name="hoursSpent"
+                          value={formData.hoursSpent}
+                          onChange={handleInputChange}
+                          required
+                          min="1"
+                          className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          placeholder="Enter hours spent"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-blue-200 mb-2">
-                      Project Name
-                    </label>
-                    <input
-                      type="text"
-                      name="projectName"
-                      value={formData.projectName}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      placeholder="Enter project name"
-                    />
-                  </div>
+                      <div>
+                        <label className="block text-sm font-medium text-blue-200 mb-2">
+                          Project Name
+                        </label>
+                        <input
+                          type="text"
+                          name="projectName"
+                          value={formData.projectName}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          placeholder="Enter project name"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-blue-200 mb-2">
-                      Services Used
-                    </label>
-                    <textarea
-                      name="servicesUsed"
-                      value={formData.servicesUsed}
-                      onChange={handleInputChange}
-                      rows="3"
-                      className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      placeholder="List services used (e.g., React, Node.js, PostgreSQL)"
-                    />
-                  </div>
+                      <div>
+                        <label className="block text-sm font-medium text-blue-200 mb-2">
+                          Services Used
+                        </label>
+                        <textarea
+                          name="servicesUsed"
+                          value={formData.servicesUsed}
+                          onChange={handleInputChange}
+                          rows="3"
+                          className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          placeholder="List services used (e.g., React, Node.js, PostgreSQL)"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-blue-200 mb-2">
-                      Git Repository URL
-                    </label>
-                    <input
-                      type="url"
-                      name="gitRepoUrl"
-                      value={formData.gitRepoUrl}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      placeholder="https://github.com/username/repository"
-                    />
-                  </div>
+                      <div>
+                        <label className="block text-sm font-medium text-blue-200 mb-2">
+                          Git Repository URL
+                        </label>
+                        <input
+                          type="url"
+                          name="gitRepoUrl"
+                          value={formData.gitRepoUrl}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          placeholder="https://github.com/username/repository"
+                        />
+                      </div>
 
 
 
-                  <div className="flex justify-end space-x-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateForm(false)}
-                      className="px-6 py-3 bg-slate-600/50 backdrop-blur-sm border border-slate-500/30 text-slate-200 rounded-xl font-semibold transition duration-200 hover:bg-slate-600/70"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-semibold shadow-lg hover:from-green-700 hover:to-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02]"
-                    >
-                      {isSubmitting ? 'Creating...' : 'Create Submission'}
-                    </button>
-                  </div>
-                </form>
+                      <div className="flex justify-end space-x-4">
+                        <button
+                          type="button"
+                          onClick={() => setShowCreateForm(false)}
+                          className="px-6 py-3 bg-slate-600/50 backdrop-blur-sm border border-slate-500/30 text-slate-200 rounded-xl font-semibold transition duration-200 hover:bg-slate-600/70"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-semibold shadow-lg hover:from-green-700 hover:to-green-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02]"
+                        >
+                          {isSubmitting ? 'Creating...' : 'Create Submission'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </>
               )}
             </div>
           )}
+
+
 
           {/* Judge Dashboard View */}
           {isJudge && (
@@ -1024,7 +1183,7 @@ Type "DELETE" to confirm:`;
           )}
 
           {/* Edit Submission Form - Superadmin Only */}
-          {isSuperAdmin && showEditForm && (
+          {isSuperAdmin && activeTab === 'submissions' && showEditForm && (
             <div className="mb-8 p-6 bg-green-600/10 backdrop-blur-xl border border-green-500/30 rounded-3xl shadow-2xl">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-green-200">Edit Submission</h2>
@@ -1163,7 +1322,7 @@ Type "DELETE" to confirm:`;
           )}
 
           {/* Statistics Section - Superadmin Only */}
-          {isSuperAdmin && (
+          {isSuperAdmin && activeTab === 'submissions' && (
             <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="p-6 bg-blue-600/10 backdrop-blur-xl border border-blue-500/30 rounded-3xl shadow-2xl">
                 <div className="flex items-center">
@@ -1271,7 +1430,7 @@ Type "DELETE" to confirm:`;
           )}
 
           {/* Search and Filter Controls - Superadmin Only */}
-          {isSuperAdmin && (
+          {isSuperAdmin && activeTab === 'submissions' && (
             <div className="mb-6 p-6 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 md:space-x-4">
                 <div className="flex-1">
@@ -1323,7 +1482,7 @@ Type "DELETE" to confirm:`;
           )}
 
           {/* Submissions Table - Superadmin Only */}
-          {isSuperAdmin && (
+          {isSuperAdmin && activeTab === 'submissions' && (
             <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl">
               <div className="px-6 py-4 border-b border-white/10">
                 <div className="flex items-center justify-between">
@@ -1353,212 +1512,448 @@ Type "DELETE" to confirm:`;
                   </div>
                 </div>
               ) : (
-                <table className="w-full">
-                  <thead className="bg-white/5">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Team Member</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Project Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Votes</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Hours Spent</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Submission Link</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white/5 divide-y divide-white/10">
-                    {filteredAndSortedSubmissions.length === 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-white/5">
                       <tr>
-                        <td colSpan="6" className="px-6 py-8 text-center text-slate-400">
-                          {searchTerm ? 'No submissions found matching your search.' : 'No submissions available.'}
-                        </td>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Team Member</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Project Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Votes</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Hours Spent</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Submission Link</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Actions</th>
                       </tr>
-                    ) : (
-                      filteredAndSortedSubmissions.map((sub) => (
-                        <tr key={sub.id} className="hover:bg-white/10 transition-colors duration-200">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
-                            {sub.team_member_name}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-slate-200 max-w-xs truncate" title={sub.project_name || 'N/A'}>
-                            {sub.project_name || 'N/A'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
-                            {sub.voteCount}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
-                            {sub.hours_spent}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-blue-200 max-w-xs truncate" title={sub.submission_link}>
-                            <a
-                              href={sub.submission_link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-300 hover:text-blue-100 underline"
-                            >
-                              {sub.submission_link}
-                            </a>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() => {
-                                  setSelectedSubmission(sub);
-                                  setShowDetailModal(true);
-                                }}
-                                className="px-3 py-1 bg-green-600/50 backdrop-blur-sm border border-green-500/30 text-green-200 rounded-lg font-medium transition duration-200 hover:bg-green-600/70 hover:text-white cursor-pointer"
-                              >
-                                View
-                              </button>
-                              <button
-                                onClick={() => handleEdit(sub)}
-                                className="px-3 py-1 bg-blue-600/50 backdrop-blur-sm border border-blue-500/30 text-blue-200 rounded-lg font-medium transition duration-200 hover:bg-blue-600/70 hover:text-white"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleDelete(sub.id, sub.team_member_name)}
-                                className="px-3 py-1 bg-red-600/50 backdrop-blur-sm border border-red-500/30 text-red-200 rounded-lg font-medium transition duration-200 hover:bg-red-600/70 hover:text-white"
-                              >
-                                Delete
-                              </button>
-                            </div>
+                    </thead>
+                    <tbody className="bg-white/5 divide-y divide-white/10">
+                      {filteredAndSortedSubmissions.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="px-6 py-8 text-center text-slate-400">
+                            {searchTerm ? 'No submissions found matching your search.' : 'No submissions available.'}
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : (
+                        filteredAndSortedSubmissions.map((sub) => (
+                          <tr key={sub.id} className="hover:bg-white/10 transition-colors duration-200">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                              {sub.team_member_name}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-200 max-w-xs truncate" title={sub.project_name || 'N/A'}>
+                              {sub.project_name || 'N/A'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
+                              {sub.voteCount}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
+                              {sub.hours_spent}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-blue-200 max-w-xs truncate" title={sub.submission_link}>
+                              <a
+                                href={sub.submission_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-300 hover:text-blue-100 underline"
+                              >
+                                {sub.submission_link}
+                              </a>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={() => {
+                                    setSelectedSubmission(sub);
+                                    setShowDetailModal(true);
+                                  }}
+                                  className="px-3 py-1 bg-green-600/50 backdrop-blur-sm border border-green-500/30 text-green-200 rounded-lg font-medium transition duration-200 hover:bg-green-600/70 hover:text-white cursor-pointer"
+                                >
+                                  View
+                                </button>
+                                <button
+                                  onClick={() => handleEdit(sub)}
+                                  className="px-3 py-1 bg-blue-600/50 backdrop-blur-sm border border-blue-500/30 text-blue-200 rounded-lg font-medium transition duration-200 hover:bg-blue-600/70 hover:text-white"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(sub.id, sub.team_member_name)}
+                                  className="px-3 py-1 bg-red-600/50 backdrop-blur-sm border border-red-500/30 text-red-200 rounded-lg font-medium transition duration-200 hover:bg-red-600/70 hover:text-white"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           )}
+
+          {/* Users Table */}
+          {activeTab === 'users' && (isSuperAdmin || isJudge) && (
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl mt-8">
+              <div className="px-6 py-4 border-b border-white/10">
+                <h2 className="text-lg font-semibold text-white">All Users</h2>
+              </div>
+
+              {isLoading ? (
+                <div className="p-8 text-center">
+                  <div className="inline-flex items-center px-4 py-2 font-semibold leading-6 text-blue-200">
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Loading users...
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-white/10 text-left">
+                        <th className="px-6 py-3 text-xs font-semibold text-blue-200 uppercase tracking-wider">Name</th>
+                        <th className="px-6 py-3 text-xs font-semibold text-blue-200 uppercase tracking-wider">Email</th>
+                        <th className="px-6 py-3 text-xs font-semibold text-blue-200 uppercase tracking-wider">Role</th>
+                        <th className="px-6 py-3 text-xs font-semibold text-blue-200 uppercase tracking-wider">Created At</th>
+                        <th className="px-6 py-3 text-xs font-semibold text-blue-200 uppercase tracking-wider text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {usersList.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="px-6 py-8 text-center text-slate-400">
+                            No users found.
+                          </td>
+                        </tr>
+                      ) : (
+                        usersList.map((userItem) => (
+                          <tr key={userItem.id} className="hover:bg-white/5 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                              {userItem.name}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
+                              {userItem.email}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${userItem.role === 'superadmin'
+                                ? 'bg-purple-100 text-purple-800'
+                                : 'bg-green-100 text-green-800'
+                                }`}>
+                                {userItem.role}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
+                              {userItem.created_at ? new Date(userItem.created_at).toLocaleDateString() : 'N/A'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
+                              <button
+                                onClick={() => initiatePasswordReset(userItem)}
+                                className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                                title="Reset Password"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                </svg>
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Create User Modal */}
+          {showCreateUserForm && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-[#1e293b] border border-white/20 rounded-3xl shadow-2xl p-8 max-w-2xl w-full">
+                <div className="flex justify-between items-center mb-6">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-3 bg-purple-500/20 rounded-xl">
+                      <svg className="h-6 w-6 text-purple-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z" />
+                      </svg>
+                    </div>
+                    <h2 className="text-2xl font-bold text-white">Add New User</h2>
+                  </div>
+                  <button onClick={() => setShowCreateUserForm(false)} className="text-slate-400 hover:text-white transition-colors">
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreateUser} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Name</label>
+                      <input
+                        type="text"
+                        name="name"
+                        value={userFormData.name}
+                        onChange={handleUserInputChange}
+                        className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-xl text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                        placeholder="Full name"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Email</label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={userFormData.email}
+                        onChange={handleUserInputChange}
+                        className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-xl text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                        placeholder="Email address"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Password</label>
+                      <input
+                        type="password"
+                        name="password"
+                        value={userFormData.password}
+                        onChange={handleUserInputChange}
+                        className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-xl text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                        placeholder="Password"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Role</label>
+                      <select
+                        name="role"
+                        value={userFormData.role}
+                        onChange={handleUserInputChange}
+                        className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-xl text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all appearance-none"
+                      >
+                        <option value="judge">Judge</option>
+                        <option value="superadmin">Super Admin</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-4">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold shadow-lg hover:from-purple-700 hover:to-purple-800 transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                          </svg>
+                          Create User
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Reset Password Modal */}
+          {showResetPasswordModal && selectedUserForReset && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-[#1e293b] border border-white/20 rounded-3xl shadow-2xl p-8 max-w-md w-full">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-bold text-white">Reset Password</h3>
+                  <button onClick={() => setShowResetPasswordModal(false)} className="text-slate-400 hover:text-white transition-colors">
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <form onSubmit={handlePasswordReset} className="space-y-6">
+                  <div>
+                    <p className="text-slate-300 mb-4">
+                      Reset password for user <span className="text-white font-semibold">{selectedUserForReset.name}</span>
+                    </p>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">New Password</label>
+                    <input
+                      type="password"
+                      value={newPasswordValue}
+                      onChange={(e) => setNewPasswordValue(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-xl text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      placeholder="Enter new password"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex justify-end pt-4 space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowResetPasswordModal(false)}
+                      className="px-4 py-2 bg-slate-700 text-slate-200 rounded-lg font-medium hover:bg-slate-600 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
+                    >
+                      {isSubmitting ? 'Resetting...' : 'Reset Password'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+
 
 
         </main>
 
         {/* Logout Confirmation Overlay */}
-        {showLogoutConfirm && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl p-8 max-w-md w-full">
-              <div className="text-center">
-                {/* Icon */}
-                <div className="mx-auto h-16 w-16 bg-red-600/20 rounded-2xl flex items-center justify-center mb-6 shadow-lg">
-                  <svg className="h-8 w-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                </div>
+        {
+          showLogoutConfirm && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl p-8 max-w-md w-full">
+                <div className="text-center">
+                  {/* Icon */}
+                  <div className="mx-auto h-16 w-16 bg-red-600/20 rounded-2xl flex items-center justify-center mb-6 shadow-lg">
+                    <svg className="h-8 w-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </div>
 
-                {/* Title */}
-                <h3 className="text-xl font-bold text-white mb-2">Confirm Logout</h3>
+                  {/* Title */}
+                  <h3 className="text-xl font-bold text-white mb-2">Confirm Logout</h3>
 
-                {/* Message */}
-                <p className="text-slate-300 mb-6">
-                  Are you sure you want to logout, <span className="font-semibold text-white">{user?.name}</span>?
-                  <br />
-                  <span className="text-sm text-slate-400">
-                    ({user?.role === 'superadmin' ? 'Super Admin' : 'Judge'})
-                  </span>
-                </p>
+                  {/* Message */}
+                  <p className="text-slate-300 mb-6">
+                    Are you sure you want to logout, <span className="font-semibold text-white">{user?.name}</span>?
+                    <br />
+                    <span className="text-sm text-slate-400">
+                      ({user?.role === 'superadmin' ? 'Super Admin' : 'Judge'})
+                    </span>
+                  </p>
 
-                {/* Buttons */}
-                <div className="flex space-x-4">
-                  <button
-                    onClick={cancelLogout}
-                    className="flex-1 px-6 py-3 bg-slate-600/50 backdrop-blur-sm border border-slate-500/30 text-slate-200 rounded-xl font-semibold transition duration-200 hover:bg-slate-600/70 hover:border-slate-400/50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={confirmLogout}
-                    className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl font-semibold shadow-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-[1.02]"
-                  >
-                    Logout
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Submission Detail Modal */}
-        {showDetailModal && selectedSubmission && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl p-8 max-w-2xl w-full max-h-full overflow-y-auto">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold text-white">Submission Details</h3>
-                <button
-                  onClick={() => setShowDetailModal(false)}
-                  className="px-4 py-2 bg-slate-600/50 backdrop-blur-sm border border-slate-500/30 text-slate-200 rounded-xl font-semibold transition duration-200 hover:bg-slate-600/70"
-                >
-                  Close
-                </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div>
-                  <p className="text-sm font-medium text-blue-200">Team Member:</p>
-                  <p className="text-lg font-bold text-white">{selectedSubmission.team_member_name}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-blue-200">Project Name:</p>
-                  <p className="text-lg font-bold text-white">{selectedSubmission.project_name || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-blue-200">Votes:</p>
-                  <p className="text-lg font-bold text-white">{selectedSubmission.voteCount}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-blue-200">Hours Spent:</p>
-                  <p className="text-lg font-bold text-white">{selectedSubmission.hours_spent}</p>
-                </div>
-                <div className="md:col-span-2">
-                  <p className="text-sm font-medium text-blue-200">Problem Description:</p>
-                  <p className="text-lg text-slate-200">{selectedSubmission.problem_description}</p>
-                </div>
-                <div className="md:col-span-2">
-                  <p className="text-sm font-medium text-blue-200">Services Used:</p>
-                  <p className="text-lg text-slate-200">{selectedSubmission.services_used || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-blue-200">Git Repository URL:</p>
-                  {selectedSubmission.git_repo_url ? (
-                    <a
-                      href={selectedSubmission.git_repo_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-300 hover:text-blue-100 underline"
+                  {/* Buttons */}
+                  <div className="flex space-x-4">
+                    <button
+                      onClick={cancelLogout}
+                      className="flex-1 px-6 py-3 bg-slate-600/50 backdrop-blur-sm border border-slate-500/30 text-slate-200 rounded-xl font-semibold transition duration-200 hover:bg-slate-600/70 hover:border-slate-400/50"
                     >
-                      {selectedSubmission.git_repo_url}
-                    </a>
-                  ) : (
-                    <p className="text-lg text-slate-400">N/A</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-blue-200">Submission Link:</p>
-                  <a
-                    href={selectedSubmission.submission_link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-300 hover:text-blue-100 underline"
-                  >
-                    {selectedSubmission.submission_link}
-                  </a>
-                  <div className="mt-2">
-                    <a
-                      href={selectedSubmission.submission_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center px-4 py-2 bg-blue-600/50 backdrop-blur-sm border border-blue-500/30 text-blue-200 rounded-lg font-medium transition duration-200 hover:bg-blue-600/70 hover:text-white"
+                      Cancel
+                    </button>
+                    <button
+                      onClick={confirmLogout}
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl font-semibold shadow-lg hover:from-red-700 hover:to-red-800 transition-all duration-200 transform hover:scale-[1.02]"
                     >
-                      <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                      Open Submission
-                    </a>
+                      Logout
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
-    </ProtectedRoute>
+          )
+        }
+
+        {/* Submission Detail Modal */}
+        {
+          showDetailModal && selectedSubmission && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl p-8 max-w-2xl w-full max-h-full overflow-y-auto">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-2xl font-bold text-white">Submission Details</h3>
+                  <button
+                    onClick={() => setShowDetailModal(false)}
+                    className="px-4 py-2 bg-slate-600/50 backdrop-blur-sm border border-slate-500/30 text-slate-200 rounded-xl font-semibold transition duration-200 hover:bg-slate-600/70"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <p className="text-sm font-medium text-blue-200">Team Member:</p>
+                    <p className="text-lg font-bold text-white">{selectedSubmission.team_member_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-blue-200">Project Name:</p>
+                    <p className="text-lg font-bold text-white">{selectedSubmission.project_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-blue-200">Votes:</p>
+                    <p className="text-lg font-bold text-white">{selectedSubmission.voteCount}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-blue-200">Hours Spent:</p>
+                    <p className="text-lg font-bold text-white">{selectedSubmission.hours_spent}</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-sm font-medium text-blue-200">Problem Description:</p>
+                    <p className="text-lg text-slate-200">{selectedSubmission.problem_description}</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-sm font-medium text-blue-200">Services Used:</p>
+                    <p className="text-lg text-slate-200">{selectedSubmission.services_used || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-blue-200">Git Repository URL:</p>
+                    {selectedSubmission.git_repo_url ? (
+                      <a
+                        href={selectedSubmission.git_repo_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-300 hover:text-blue-100 underline"
+                      >
+                        {selectedSubmission.git_repo_url}
+                      </a>
+                    ) : (
+                      <p className="text-lg text-slate-400">N/A</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-blue-200">Submission Link:</p>
+                    <a
+                      href={selectedSubmission.submission_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-300 hover:text-blue-100 underline"
+                    >
+                      {selectedSubmission.submission_link}
+                    </a>
+                    <div className="mt-2">
+                      <a
+                        href={selectedSubmission.submission_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center px-4 py-2 bg-blue-600/50 backdrop-blur-sm border border-blue-500/30 text-blue-200 rounded-lg font-medium transition duration-200 hover:bg-blue-600/70 hover:text-white"
+                      >
+                        <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        Open Submission
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        }
+      </div >
+    </ProtectedRoute >
   );
 }

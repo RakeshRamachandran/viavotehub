@@ -71,7 +71,7 @@ export const authenticateUser = async (email, password) => {
 };
 
 // Create a new user in the public.users table
-export const createUser = async (email, name, password) => {
+export const createUser = async (email, name, password, role = 'judge') => {
   try {
     const hashedPassword = hashPassword(password);
 
@@ -81,7 +81,8 @@ export const createUser = async (email, name, password) => {
         {
           email,
           name,
-          password: hashedPassword
+          password: hashedPassword,
+          role
         }
       ])
       .select('id, email, name')
@@ -234,5 +235,26 @@ export const deleteSubmission = async (submissionId) => {
   } catch (error) {
     console.error('Submission deletion error:', error);
     return { success: false, error: 'Failed to delete submission' };
+  }
+};
+
+// Reset user password (admin function)
+export const resetUserPassword = async (userId, newPassword) => {
+  try {
+    const hashedPassword = hashPassword(newPassword);
+    const { error } = await supabase
+      .from('users')
+      .update({ password: hashedPassword })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('Password reset error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Password reset error:', error);
+    return { success: false, error: 'Failed to reset password' };
   }
 };

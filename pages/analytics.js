@@ -20,7 +20,7 @@ export default function Analytics() {
       router.push('/submissions');
       return;
     }
-    
+
     if (user?.role === 'superadmin') {
       fetchAnalytics();
     }
@@ -29,7 +29,7 @@ export default function Analytics() {
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      
+
       // Fetch all submissions with their votes
       const { data: submissionsData, error: submissionsError } = await supabase
         .from('submissions')
@@ -55,7 +55,7 @@ export default function Analytics() {
         const averageRating = votes.length > 0 ? (totalRating / votes.length).toFixed(2) : 0;
         const totalScore = totalRating;
         const judgeCount = votes.length;
-        
+
         // Calculate standard deviation for score consistency
         let standardDeviation = 0;
         if (votes.length > 1) {
@@ -82,7 +82,7 @@ export default function Analytics() {
       // Sort by total score (descending) and get top 3
       const sortedSubmissions = submissionsWithScores.sort((a, b) => b.totalScore - a.totalScore);
       const top3 = sortedSubmissions.slice(0, 3);
-      
+
       setTopProjects(top3);
       setAllSubmissions(sortedSubmissions);
       setMessage('');
@@ -134,7 +134,7 @@ export default function Analytics() {
             <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-slate-600 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-blob animation-delay-2000"></div>
             <div className="absolute top-20 left-20 w-40 h-40 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-blob animation-delay-4000"></div>
           </div>
-          
+
           <Navigation />
           <div className="relative z-10 flex items-center justify-center min-h-screen px-4 py-8">
             <div className="bg-white/5 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/10 p-8 max-w-md w-full">
@@ -170,7 +170,7 @@ export default function Analytics() {
             <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-slate-600 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-blob animation-delay-2000"></div>
             <div className="absolute top-20 left-20 w-40 h-40 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-blob animation-delay-4000"></div>
           </div>
-          
+
           <Navigation />
           <div className="relative z-10 flex items-center justify-center min-h-screen px-4 py-8">
             <div className="bg-white/5 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/10 p-8 max-w-md w-full">
@@ -203,7 +203,7 @@ export default function Analytics() {
 
         {/* Navigation */}
         <Navigation />
-        
+
         {/* Header */}
         <header className="relative z-10 bg-white/5 backdrop-blur-md border-b border-white/10 sticky top-0">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -243,7 +243,7 @@ export default function Analytics() {
               </div>
             </div>
           )}
-          
+
 
 
           {/* Top 3 Projects Section */}
@@ -260,7 +260,7 @@ export default function Analytics() {
                         {badge.text}
                       </span>
                     </div>
-                    
+
                     <h3 className="text-xl font-semibold text-white mb-2 text-center">
                       {project.team_member_name}
                     </h3>
@@ -269,7 +269,7 @@ export default function Analytics() {
                         📁 {project.project_name}
                       </p>
                     )}
-                    
+
                     <div className="space-y-3">
                       <div className="text-center">
                         <p className="text-3xl font-bold text-blue-400">
@@ -277,7 +277,7 @@ export default function Analytics() {
                         </p>
                         <p className="text-sm text-blue-200">Total Score</p>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-4 text-center">
                         <div>
                           <p className="text-lg font-semibold text-white">
@@ -292,7 +292,7 @@ export default function Analytics() {
                           <div className="text-xs text-blue-200">Judges</div>
                         </div>
                       </div>
-                      
+
                       <div className="text-center">
                         <p className="text-sm text-blue-200">Consistency</p>
                         <p className="text-sm font-medium text-white">
@@ -420,10 +420,10 @@ export default function Analytics() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                   </svg>
                 </div>
-                
+
                 {/* Title */}
                 <h3 className="text-xl font-bold text-white mb-2">Confirm Logout</h3>
-                
+
                 {/* Message */}
                 <p className="text-slate-300 mb-6">
                   Are you sure you want to logout, <span className="font-semibold text-white">{user?.name}</span>?
@@ -432,7 +432,7 @@ export default function Analytics() {
                     ({user?.role === 'superadmin' ? 'Super Admin' : 'Judge'})
                   </span>
                 </p>
-                
+
                 {/* Buttons */}
                 <div className="flex space-x-4">
                   <button
