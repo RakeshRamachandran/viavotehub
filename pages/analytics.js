@@ -11,8 +11,23 @@ export default function Analytics() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [activeCategory, setActiveCategory] = useState('Via Cursor Project');
   const { user, signOut } = useAuth();
   const router = useRouter();
+
+  // Filter submissions and calculate top projects when category or submissions change
+  useEffect(() => {
+    if (allSubmissions.length > 0) {
+      const filtered = allSubmissions.filter(sub =>
+        (sub.category === activeCategory) || (!sub.category && activeCategory === 'Via Hackathon')
+      );
+
+      const top3 = filtered.slice(0, 3);
+      setTopProjects(top3);
+    } else {
+      setTopProjects([]);
+    }
+  }, [allSubmissions, activeCategory]);
 
   useEffect(() => {
     // Redirect non-superadmin users away from analytics page
@@ -79,11 +94,10 @@ export default function Analytics() {
         };
       });
 
-      // Sort by total score (descending) and get top 3
+      // Sort by total score (descending)
       const sortedSubmissions = submissionsWithScores.sort((a, b) => b.totalScore - a.totalScore);
-      const top3 = sortedSubmissions.slice(0, 3);
 
-      setTopProjects(top3);
+      // Store all sorted submissions - filtering happens in useEffect
       setAllSubmissions(sortedSubmissions);
       setMessage('');
     } catch (error) {
@@ -245,6 +259,31 @@ export default function Analytics() {
           )}
 
 
+          {/* Category Tabs */}
+          <div className="flex justify-center mb-8">
+            <div className="bg-white/5 backdrop-blur-xl p-1 rounded-xl border border-white/10 inline-flex">
+              <button
+                onClick={() => setActiveCategory('Via Cursor Project')}
+                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${activeCategory === 'Via Cursor Project'
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'text-slate-300 hover:text-white hover:bg-white/5'
+                  }`}
+              >
+                Via Cursor Project
+              </button>
+              <button
+                onClick={() => setActiveCategory('Via Hackathon')}
+                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${activeCategory === 'Via Hackathon'
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'text-slate-300 hover:text-white hover:bg-white/5'
+                  }`}
+              >
+                Via Hackathon
+              </button>
+            </div>
+          </div>
+
+
 
           {/* Top 3 Projects Section */}
           <div className="mb-8">
@@ -339,70 +378,72 @@ export default function Analytics() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {allSubmissions.map((submission, index) => (
-                    <tr key={submission.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {index + 1}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {submission.team_member_name}
+                  {allSubmissions
+                    .filter(sub => (sub.category === activeCategory) || (!sub.category && activeCategory === 'Via Hackathon'))
+                    .map((submission, index) => (
+                      <tr key={submission.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {index + 1}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {submission.team_member_name}
+                            </div>
+                            {submission.project_name && (
+                              <div className="text-sm text-blue-600 font-medium">
+                                📁 {submission.project_name}
+                              </div>
+                            )}
+                            <div className="text-sm text-gray-500">
+                              {submission.problem_description.substring(0, 50)}...
+                            </div>
+                            {submission.services_used && (
+                              <div className="text-sm text-green-600">
+                                🛠️ {submission.services_used.substring(0, 40)}...
+                              </div>
+                            )}
                           </div>
-                          {submission.project_name && (
-                            <div className="text-sm text-blue-600 font-medium">
-                              📁 {submission.project_name}
-                            </div>
-                          )}
-                          <div className="text-sm text-gray-500">
-                            {submission.problem_description.substring(0, 50)}...
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`text-lg font-semibold ${getScoreColor(submission.totalScore)}`}>
+                            {submission.totalScore}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {submission.averageRating}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {submission.judgeCount}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          <div className="space-y-1">
+                            {submission.votes.map((vote, voteIndex) => (
+                              <div key={voteIndex} className="flex justify-between">
+                                <span className="text-gray-600">{vote.judgeName}:</span>
+                                <span className="font-medium">{vote.rating}/10</span>
+                              </div>
+                            ))}
                           </div>
-                          {submission.services_used && (
-                            <div className="text-sm text-green-600">
-                              🛠️ {submission.services_used.substring(0, 40)}...
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`text-lg font-semibold ${getScoreColor(submission.totalScore)}`}>
-                          {submission.totalScore}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {submission.averageRating}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {submission.judgeCount}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        <div className="space-y-1">
-                          {submission.votes.map((vote, voteIndex) => (
-                            <div key={voteIndex} className="flex justify-between">
-                              <span className="text-gray-600">{vote.judgeName}:</span>
-                              <span className="font-medium">{vote.rating}/10</span>
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        <div className="space-y-2">
-                          {submission.votes.map((vote, voteIndex) => (
-                            <div key={voteIndex} className="border-l-2 border-gray-200 pl-3">
-                              <div className="font-medium text-gray-700">{vote.judgeName}:</div>
-                              {vote.remarks ? (
-                                <div className="text-gray-600 text-sm mt-1 bg-gray-50 p-2 rounded">
-                                  {vote.remarks}
-                                </div>
-                              ) : (
-                                <div className="text-gray-400 text-sm italic">No remarks</div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          <div className="space-y-2">
+                            {submission.votes.map((vote, voteIndex) => (
+                              <div key={voteIndex} className="border-l-2 border-gray-200 pl-3">
+                                <div className="font-medium text-gray-700">{vote.judgeName}:</div>
+                                {vote.remarks ? (
+                                  <div className="text-gray-600 text-sm mt-1 bg-gray-50 p-2 rounded">
+                                    {vote.remarks}
+                                  </div>
+                                ) : (
+                                  <div className="text-gray-400 text-sm italic">No remarks</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
