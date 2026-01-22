@@ -1,4 +1,4 @@
-const CACHE_NAME = 'via-votehub-v2';
+const CACHE_NAME = 'via-votehub-v3';
 const urlsToCache = [
   '/',
   '/submissions',
@@ -46,24 +46,24 @@ self.addEventListener('fetch', (event) => {
         if (response) {
           return response;
         }
-        
+
         // Clone the request because it's a stream and can only be consumed once
         const fetchRequest = event.request.clone();
-        
+
         return fetch(fetchRequest).then((response) => {
           // Check if we received a valid response
           if (!response || response.status !== 200 || response.type !== 'basic') {
             return response;
           }
-          
+
           // Clone the response because it's a stream and can only be consumed once
           const responseToCache = response.clone();
-          
+
           caches.open(CACHE_NAME)
             .then((cache) => {
               cache.put(event.request, responseToCache);
             });
-          
+
           return response;
         }).catch(() => {
           // If offline and no cache, return a custom offline page
@@ -104,7 +104,7 @@ self.addEventListener('sync', (event) => {
 function doBackgroundSync() {
   // Handle background sync logic here
   console.log('Background sync triggered');
-  
+
   // You can implement offline data sync here
   // For example, sync pending votes when connection is restored
 }
