@@ -479,7 +479,7 @@ export default function Admin() {
       teamMemberName: submission.team_member_name,
       submissionLink: submission.submission_link,
       problemDescription: submission.problem_description,
-      hoursSpent: submission.hours_spent.toString(),
+      hoursSpent: submission.hours_spent ? submission.hours_spent.toString() : '',
       projectName: submission.project_name || '',
       servicesUsed: submission.services_used || '',
       gitRepoUrl: submission.git_repo_url || '',
