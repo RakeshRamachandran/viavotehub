@@ -48,6 +48,10 @@ export default function Admin() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [activeCategory, setActiveCategory] = useState('Via Cursor Project'); // New state for category toggle
+
+  // Filter submissions by category first for statistics
+  const categorySubmissions = submissions.filter(s => s.category === activeCategory);
   const [isLoading, setIsLoading] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -426,7 +430,7 @@ export default function Admin() {
         formData.teamMemberName,
         formData.submissionLink,
         formData.problemDescription,
-        parseInt(formData.hoursSpent),
+        formData.hoursSpent ? parseInt(formData.hoursSpent) : null,
         formData.projectName,
         formData.servicesUsed,
         formData.gitRepoUrl,
@@ -496,7 +500,7 @@ export default function Admin() {
         teamMemberName: formData.teamMemberName,
         submissionLink: formData.submissionLink,
         problemDescription: formData.problemDescription,
-        hoursSpent: parseInt(formData.hoursSpent),
+        hoursSpent: formData.hoursSpent ? parseInt(formData.hoursSpent) : null,
         projectName: formData.projectName,
         servicesUsed: formData.servicesUsed,
         gitRepoUrl: formData.gitRepoUrl,
@@ -665,6 +669,115 @@ Type "DELETE" to confirm:`;
       </ProtectedRoute>
     );
   }
+
+  const renderSubmissionTable = (submissionsList, title) => (
+    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl mb-8">
+      <div className="px-6 py-4 border-b border-white/10">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">{title}</h2>
+          <div className="text-sm text-slate-300">
+            {searchTerm ? (
+              <span>
+                Showing {submissionsList.length} of {submissions.length} results
+              </span>
+            ) : (
+              <span>
+                {submissionsList.length} submission{submissionsList.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="p-8 text-center">
+          <div className="inline-flex items-center px-4 py-2 font-semibold leading-6 text-blue-200">
+            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Loading submissions...
+          </div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-white/5">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Team Member</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Project Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Votes</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Hours Spent</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Submission Link</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white/5 divide-y divide-white/10">
+              {submissionsList.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="px-6 py-8 text-center text-slate-400">
+                    {searchTerm ? 'No submissions found matching your search.' : 'No submissions available in this category.'}
+                  </td>
+                </tr>
+              ) : (
+                submissionsList.map((sub) => (
+                  <tr key={sub.id} className="hover:bg-white/10 transition-colors duration-200">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                      {sub.team_member_name}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-200 max-w-xs truncate" title={sub.project_name || 'N/A'}>
+                      {sub.project_name || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
+                      {sub.voteCount}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
+                      {sub.hours_spent}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-blue-200 max-w-xs truncate" title={sub.submission_link}>
+                      <a
+                        href={sub.submission_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-300 hover:text-blue-100 underline"
+                      >
+                        {sub.submission_link}
+                      </a>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => {
+                            setSelectedSubmission(sub);
+                            setShowDetailModal(true);
+                          }}
+                          className="px-3 py-1 bg-green-600/50 backdrop-blur-sm border border-green-500/30 text-green-200 rounded-lg font-medium transition duration-200 hover:bg-green-600/70 hover:text-white cursor-pointer"
+                        >
+                          View
+                        </button>
+                        <button
+                          onClick={() => handleEdit(sub)}
+                          className="px-3 py-1 bg-blue-600/50 backdrop-blur-sm border border-blue-500/30 text-blue-200 rounded-lg font-medium transition duration-200 hover:bg-blue-600/70 hover:text-white"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(sub.id, sub.team_member_name)}
+                          className="px-3 py-1 bg-red-600/50 backdrop-blur-sm border border-red-500/30 text-red-200 rounded-lg font-medium transition duration-200 hover:bg-red-600/70 hover:text-white"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <ProtectedRoute>
@@ -891,7 +1004,6 @@ Type "DELETE" to confirm:`;
                           name="hoursSpent"
                           value={formData.hoursSpent}
                           onChange={handleInputChange}
-                          required
                           min="1"
                           className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-blue-400/50 rounded-xl text-white placeholder-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                           placeholder="Enter hours spent"
@@ -1252,7 +1364,6 @@ Type "DELETE" to confirm:`;
                     name="hoursSpent"
                     value={formData.hoursSpent}
                     onChange={handleInputChange}
-                    required
                     min="1"
                     className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-green-400/50 rounded-xl text-white placeholder-green-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
                     placeholder="Enter hours spent"
@@ -1321,59 +1432,7 @@ Type "DELETE" to confirm:`;
             </div>
           )}
 
-          {/* Statistics Section - Superadmin Only */}
-          {isSuperAdmin && activeTab === 'submissions' && (
-            <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="p-6 bg-blue-600/10 backdrop-blur-xl border border-blue-500/30 rounded-3xl shadow-2xl">
-                <div className="flex items-center">
-                  <div className="h-12 w-12 bg-blue-600/20 rounded-2xl flex items-center justify-center mr-4">
-                    <svg className="h-6 w-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-blue-200">Total Submissions</p>
-                    <p className="text-2xl font-bold text-white">{submissions.length}</p>
-                  </div>
-                </div>
-              </div>
 
-              <div className="p-6 bg-green-600/10 backdrop-blur-xl border border-green-500/30 rounded-3xl shadow-2xl">
-                <div className="flex items-center">
-                  <div className="h-12 w-12 bg-green-600/20 rounded-2xl flex items-center justify-center mr-4">
-                    <svg className="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-green-200">Total Votes</p>
-                    <p className="text-2xl font-bold text-white">
-                      {submissions.reduce((total, sub) => total + sub.voteCount, 0)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 bg-purple-600/10 backdrop-blur-xl border border-purple-500/30 rounded-3xl shadow-2xl">
-                <div className="flex items-center">
-                  <div className="h-12 w-12 bg-purple-600/20 rounded-2xl flex items-center justify-center mr-4">
-                    <svg className="h-6 w-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-purple-200">Avg Rating</p>
-                    <p className="text-2xl font-bold text-white">
-                      {submissions.length > 0
-                        ? (submissions.reduce((total, sub) => total + (sub.averageRating || 0), 0) / submissions.length).toFixed(1)
-                        : '0.0'
-                      }
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Statistics Section - Judge Only */}
           {isJudge && (
@@ -1431,164 +1490,143 @@ Type "DELETE" to confirm:`;
 
           {/* Search and Filter Controls - Superadmin Only */}
           {isSuperAdmin && activeTab === 'submissions' && (
-            <div className="mb-6 p-6 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 md:space-x-4">
-                <div className="flex-1">
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Search by team member, project name, or Git repo URL..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex space-x-4">
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  >
-                    <option value="created_at" className="bg-slate-800 text-white">Date Created</option>
-                    <option value="team_member_name" className="bg-slate-800 text-white">Team Member</option>
-                    <option value="hours_spent" className="bg-slate-800 text-white">Hours Spent</option>
-                    <option value="voteCount" className="bg-slate-800 text-white">Vote Count</option>
-                  </select>
-
+            <div className="mb-6 space-y-4">
+              {/* Category Slider */}
+              <div className="flex justify-center mb-6">
+                <div className="bg-white/10 backdrop-blur-sm border border-white/10 p-1 rounded-xl inline-flex relative">
                   <button
-                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                    className="px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white hover:bg-white/20 transition-all duration-200"
+                    onClick={() => setActiveCategory('Via Cursor Project')}
+                    className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${activeCategory === 'Via Cursor Project'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'text-slate-300 hover:text-white'
+                      }`}
                   >
-                    {sortOrder === 'asc' ? (
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                      </svg>
-                    ) : (
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    )}
+                    Via Cursor Project
+                  </button>
+                  <button
+                    onClick={() => setActiveCategory('Via Hackathon')}
+                    className={`px-6 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${activeCategory === 'Via Hackathon'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'text-slate-300 hover:text-white'
+                      }`}
+                  >
+                    Via Hackathon
                   </button>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Submissions Table - Superadmin Only */}
-          {isSuperAdmin && activeTab === 'submissions' && (
-            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl">
-              <div className="px-6 py-4 border-b border-white/10">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-white">All Submissions</h2>
-                  <div className="text-sm text-slate-300">
-                    {searchTerm ? (
-                      <span>
-                        Showing {filteredAndSortedSubmissions.length} of {submissions.length} submissions
-                      </span>
-                    ) : (
-                      <span>
-                        {submissions.length} submission{submissions.length !== 1 ? 's' : ''} total
-                      </span>
-                    )}
+              {/* Statistics Section - Filtered by Category */}
+              <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="p-6 bg-blue-600/10 backdrop-blur-xl border border-blue-500/30 rounded-3xl shadow-2xl">
+                  <div className="flex items-center">
+                    <div className="h-12 w-12 bg-blue-600/20 rounded-2xl flex items-center justify-center mr-4">
+                      <svg className="h-6 w-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-blue-200">Total Submissions</p>
+                      <p className="text-2xl font-bold text-white">{categorySubmissions.length}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 bg-green-600/10 backdrop-blur-xl border border-green-500/30 rounded-3xl shadow-2xl">
+                  <div className="flex items-center">
+                    <div className="h-12 w-12 bg-green-600/20 rounded-2xl flex items-center justify-center mr-4">
+                      <svg className="h-6 w-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-green-200">Total Votes</p>
+                      <p className="text-2xl font-bold text-white">
+                        {categorySubmissions.reduce((total, sub) => total + sub.voteCount, 0)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 bg-purple-600/10 backdrop-blur-xl border border-purple-500/30 rounded-3xl shadow-2xl">
+                  <div className="flex items-center">
+                    <div className="h-12 w-12 bg-purple-600/20 rounded-2xl flex items-center justify-center mr-4">
+                      <svg className="h-6 w-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-purple-200">Avg Rating</p>
+                      <p className="text-2xl font-bold text-white">
+                        {categorySubmissions.length > 0
+                          ? (categorySubmissions.reduce((total, sub) => total + (sub.averageRating || 0), 0) / categorySubmissions.length).toFixed(1)
+                          : '0.0'
+                        }
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {isLoading ? (
-                <div className="p-8 text-center">
-                  <div className="inline-flex items-center px-4 py-2 font-semibold leading-6 text-blue-200">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Loading submissions...
+              <div className="p-6 bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 md:space-x-4">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Search by team member, project name, or Git repo URL..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-4">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className="px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    >
+                      <option value="created_at" className="bg-slate-800 text-white">Date Created</option>
+                      <option value="team_member_name" className="bg-slate-800 text-white">Team Member</option>
+                      <option value="hours_spent" className="bg-slate-800 text-white">Hours Spent</option>
+                      <option value="voteCount" className="bg-slate-800 text-white">Vote Count</option>
+                    </select>
+
+                    <button
+                      onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                      className="px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white hover:bg-white/20 transition-all duration-200"
+                    >
+                      {sortOrder === 'asc' ? (
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                      ) : (
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      )}
+                    </button>
                   </div>
                 </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-white/5">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Team Member</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Project Name</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Votes</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Hours Spent</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Submission Link</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-blue-200 uppercase tracking-wider">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white/5 divide-y divide-white/10">
-                      {filteredAndSortedSubmissions.length === 0 ? (
-                        <tr>
-                          <td colSpan="6" className="px-6 py-8 text-center text-slate-400">
-                            {searchTerm ? 'No submissions found matching your search.' : 'No submissions available.'}
-                          </td>
-                        </tr>
-                      ) : (
-                        filteredAndSortedSubmissions.map((sub) => (
-                          <tr key={sub.id} className="hover:bg-white/10 transition-colors duration-200">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
-                              {sub.team_member_name}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-slate-200 max-w-xs truncate" title={sub.project_name || 'N/A'}>
-                              {sub.project_name || 'N/A'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
-                              {sub.voteCount}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
-                              {sub.hours_spent}
-                            </td>
-                            <td className="px-6 py-4 text-sm text-blue-200 max-w-xs truncate" title={sub.submission_link}>
-                              <a
-                                href={sub.submission_link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-300 hover:text-blue-100 underline"
-                              >
-                                {sub.submission_link}
-                              </a>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-200">
-                              <div className="flex space-x-2">
-                                <button
-                                  onClick={() => {
-                                    setSelectedSubmission(sub);
-                                    setShowDetailModal(true);
-                                  }}
-                                  className="px-3 py-1 bg-green-600/50 backdrop-blur-sm border border-green-500/30 text-green-200 rounded-lg font-medium transition duration-200 hover:bg-green-600/70 hover:text-white cursor-pointer"
-                                >
-                                  View
-                                </button>
-                                <button
-                                  onClick={() => handleEdit(sub)}
-                                  className="px-3 py-1 bg-blue-600/50 backdrop-blur-sm border border-blue-500/30 text-blue-200 rounded-lg font-medium transition duration-200 hover:bg-blue-600/70 hover:text-white"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(sub.id, sub.team_member_name)}
-                                  className="px-3 py-1 bg-red-600/50 backdrop-blur-sm border border-red-500/30 text-red-200 rounded-lg font-medium transition duration-200 hover:bg-red-600/70 hover:text-white"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              </div>
             </div>
+
+          )}
+
+          {/* Submissions Tables - Superadmin Only */}
+          {isSuperAdmin && activeTab === 'submissions' && (
+            <>
+              {renderSubmissionTable(
+                filteredAndSortedSubmissions.filter(s => s.category === activeCategory),
+                `${activeCategory} Submissions`
+              )}
+            </>
           )}
 
           {/* Users Table */}

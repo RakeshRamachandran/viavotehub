@@ -1,8 +1,10 @@
+require('dotenv').config({ path: '.env.local' });
+require('dotenv').config({ path: '.env' });
 const { supabase } = require('./utils/supabaseClient');
 
 async function setupDatabase() {
   console.log('🚀 Setting up database schema...');
-  
+
   try {
     // Create users table with roles
     console.log('📋 Creating users table...');
@@ -19,7 +21,7 @@ async function setupDatabase() {
         );
       `
     });
-    
+
     if (usersError) {
       console.log('Users table already exists or error:', usersError.message);
     } else {
@@ -41,7 +43,7 @@ async function setupDatabase() {
         );
       `
     });
-    
+
     if (submissionsError) {
       console.log('Submissions table already exists or error:', submissionsError.message);
     } else {
@@ -63,7 +65,7 @@ async function setupDatabase() {
         );
       `
     });
-    
+
     if (votesError) {
       console.log('Votes table already exists or error:', votesError.message);
     } else {
@@ -94,7 +96,7 @@ async function setupDatabase() {
           role: 'judge'
         }
       ], { onConflict: 'email' });
-    
+
     if (insertUsersError) {
       console.log('Error inserting users:', insertUsersError.message);
     } else {
@@ -137,7 +139,7 @@ async function setupDatabase() {
           hours_spent: 180
         }
       ], { onConflict: 'id' });
-    
+
     if (insertSubmissionsError) {
       console.log('Error inserting submissions:', insertSubmissionsError.message);
     } else {
